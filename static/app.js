@@ -261,17 +261,9 @@ schemaFields.addEventListener("click", (event) => {
   if (after && !/^\s/.test(after)) {
     insertion += " ";
   }
-  if (before.length + insertion.length + after.length > question.maxLength) {
-    question.setCustomValidity("This field would exceed the question length limit.");
-    question.reportValidity();
-    return;
-  }
-  question.setCustomValidity("");
   question.focus();
   question.setRangeText(insertion, start, end, "end");
 });
-
-question.addEventListener("input", () => question.setCustomValidity(""));
 
 viewSql.addEventListener("click", () => {
   debug.open = true;
@@ -359,7 +351,6 @@ async function loadSchema() {
   }
 
   document.title = "Insight Studio | HSBC";
-  question.maxLength = data.max_question_length;
   document.querySelector("#dataset-name").textContent = data.table;
 
   data.columns.forEach((column) => {

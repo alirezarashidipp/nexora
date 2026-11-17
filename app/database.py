@@ -3,7 +3,7 @@ import sqlite3
 from contextlib import closing
 from functools import cache
 
-from .config import DB_PATH, MAX_RESULT_ROWS
+from .config import DB_PATH
 from .schema import COLUMN_GUIDE, TABLE_NAME
 
 TABLE_REFERENCE = re.compile(
@@ -96,7 +96,7 @@ def execute_sql(sql: str) -> list[dict]:
         connection.set_authorizer(authorize)
         rows = [
             dict(row)
-            for row in connection.execute(sql).fetchmany(MAX_RESULT_ROWS)
+            for row in connection.execute(sql)
         ]
         if not read_configured_table:
             raise ValueError(f"The query must read from {TABLE_NAME!r}.")

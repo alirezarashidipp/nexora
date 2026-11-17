@@ -8,7 +8,7 @@ or sensitive employee records.
 
 ## Existing controls
 
-1. FastAPI limits question length.
+1. FastAPI requires a string question with at least two characters.
 2. Structured model output constrains validation status and SQL shape.
 3. `validate_sql()` accepts one comment-free `SELECT`, and execution requires
    a real read from the fixed `data` table rather than a table name inside text.
@@ -16,10 +16,9 @@ or sensitive employee records.
    `PRAGMA query_only = ON`.
 5. A SQLite authorizer denies reads from other tables and all SQLite write
    actions.
-6. `MAX_RESULT_ROWS` caps returned rows.
-7. Both providers use `store=False`; raw provider errors are not returned to clients.
-8. `.env.local`, `.env`, and virtual environments are excluded from Git and Docker.
-9. Docker runs the application as a non-root user.
+6. Both providers use `store=False`; raw provider errors are not returned to clients.
+7. `.env.local`, `.env`, and virtual environments are excluded from Git and Docker.
+8. Docker runs the application as a non-root user.
 
 Prompt rules are helpful but are not a security boundary. Do not remove the
 independent SQL and SQLite controls.
@@ -36,6 +35,8 @@ independent SQL and SQLite controls.
 
 - `/ask` and `/schema` have no authentication.
 - There is no rate limiting, usage quota, or cost ceiling.
+- There is no application question-length ceiling or result-row cap; large results
+  are loaded in memory and sent to the answer model. Provider context limits still apply.
 - SDK requests use a 60-second timeout and at most one retry. This is not a
   whole-workflow deadline; SQLite still has no execution timeout.
 - There is no request-level audit trail or security monitoring.

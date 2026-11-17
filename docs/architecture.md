@@ -56,7 +56,8 @@ does not add a model call, and leaves the `/ask` response contract unchanged.
 
 ## Boundaries
 
-- FastAPI validates the question length before the graph runs.
+- FastAPI validates the question type and minimum length before the graph runs.
+  There is no application maximum length or result-row cap.
 - SQLite is opened in URI read-only mode and is never created or seeded here.
 - Both providers use Chat Completions with system/user messages and strict JSON
   Schema. Pydantic validates responses in the workflow, outside connection code.

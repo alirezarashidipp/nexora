@@ -10,7 +10,7 @@ Returns `static/index.html`.
 ## `GET /schema`
 
 Returns the fixed `data` table, its live SQLite columns combined with
-`COLUMN_GUIDE`, example questions, and the maximum question length.
+`COLUMN_GUIDE` and example questions.
 
 Example response:
 
@@ -31,8 +31,7 @@ Example response:
       "possible_values": "100 fictional demo names, such as AVA CARTER and LEO KOWALSKI."
     }
   ],
-  "examples": ["How many coders?"],
-  "max_question_length": 500
+  "examples": ["How many coders?"]
 }
 ```
 
@@ -71,8 +70,10 @@ Successful response:
 | Status | Meaning |
 | --- | --- |
 | `400` | Workflow or SQL validation rejected the request |
-| `422` | Request body or question length failed API validation |
+| `422` | Request body or minimum question length failed API validation |
 | `500` | Selected provider settings or temperature are missing/invalid |
 | `502` | LLM provider/authentication or SQLite failed; raw provider details are hidden |
 
 The endpoint is synchronous and each request is independent.
+
+There is no application maximum question length or returned-row cap.

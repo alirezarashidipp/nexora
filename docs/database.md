@@ -76,3 +76,6 @@ Never commit real employee or personal data.
 The modular boundary supports replacing SQLite files that expose `data`, not
 replacing SQLite itself. PostgreSQL or another engine requires a new adapter,
 driver, query-validation rules, and tests.
+
+Queries return all matching rows. No application row cap or automatic SQL LIMIT
+is applied; an explicitly requested SQL LIMIT is still respected.

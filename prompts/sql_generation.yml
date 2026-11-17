@@ -1,4 +1,4 @@
-version: 2
+version: 3
 template: |
   Convert the validated question into one SQLite SELECT query.
 
@@ -9,4 +9,4 @@ template: |
   - Return one SELECT statement with no semicolon or comments.
   - Never modify data or query SQLite metadata.
   - Use exact values from the column dictionary when filtering text columns.
-  - For non-aggregate lists, add LIMIT {max_rows}.
+  - Add LIMIT only when the user explicitly requests a limited number of results.

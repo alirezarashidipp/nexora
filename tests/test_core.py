@@ -30,14 +30,12 @@ os.environ.update(
         "LLM_PROVIDER": "openai",
         "LLM_TEMPERATURE": "0.7",
         "DATABASE_PATH": str(TEST_DATABASE),
-        "MAX_QUESTION_LENGTH": DEFAULT_ENV["MAX_QUESTION_LENGTH"],
-        "MAX_RESULT_ROWS": DEFAULT_ENV["MAX_RESULT_ROWS"],
     }
 )
 
 from app import api, config, database, workflow
 from app import llm_connection as connection
-from app.config import MAX_QUESTION_LENGTH, STATIC_DIR
+from app.config import STATIC_DIR
 from app.schema import COLUMN_GUIDE, TABLE_NAME
 
 
@@ -174,16 +172,14 @@ class CoreDatabaseTests(unittest.TestCase):
         with self.assertRaises(sqlite3.DatabaseError):
             database.execute_sql(query)
 
-    def test_result_limit_is_enforced(self):
+    def test_query_returns_all_matching_rows(self):
         total = database.execute_sql(
             f'SELECT COUNT(*) AS total FROM "{TABLE_NAME}"'
         )[0]["total"]
-        if total < 2:
-            self.skipTest("The configured sample table has fewer than two rows.")
-
-        with patch.object(database, "MAX_RESULT_ROWS", 2):
-            rows = database.execute_sql(f'SELECT * FROM "{TABLE_NAME}"')
-        self.assertEqual(len(rows), 2)
+        rows = database.execute_sql(
+            f'SELECT * FROM "{TABLE_NAME}" UNION ALL SELECT * FROM "{TABLE_NAME}"'
+        )
+        self.assertEqual(len(rows), total * 2)
 
 
 class ContractTests(unittest.TestCase):
@@ -224,7 +220,6 @@ class ContractTests(unittest.TestCase):
                 "table": TABLE_NAME,
                 "columns": columns,
                 "examples": ["Runtime example?"],
-                "max_question_length": MAX_QUESTION_LENGTH,
             },
         )
 
@@ -280,7 +275,6 @@ class ContractTests(unittest.TestCase):
             "column.description",
             "column.possible_values",
             "data.examples",
-            "data.max_question_length",
         ):
             self.assertIn(token, script)
         self.assertRegex(

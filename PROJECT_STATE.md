@@ -16,6 +16,8 @@ the generated SQL, and get an answer grounded in the database result.
 - A three-node LangGraph routes valid, incomplete, and invalid questions.
 - OpenAI and Azure OpenAI use the official SDK with Chat Completions.
 - Provider selection is configuration-only; temperature is explicit and validated.
+- Connection code separates client creation, request preparation, and SDK calls
+  into plain functions in the same module.
 - Azure uses Microsoft Entra EnvironmentCredential with a refreshing token callback.
 - Context-managed clients/credentials close on success and error; no global cache.
 - Strict JSON output is validated by the workflow before SQL execution.
@@ -65,6 +67,8 @@ The application and container never create, migrate, or seed it.
 - There is no migration system; schema changes require database recreation or
   an externally managed database.
 - Each request is independent; there is no conversation memory.
+- No application maximum question length or result-row cap is imposed. All query
+  rows go to the answer model; provider context limits still apply.
 - The frontend targets desktop widths of 1180px and above; it has no mobile
   layout or dark appearance.
 - Charts require 2-20 rows with one unique text-label column and one numeric

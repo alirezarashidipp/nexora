@@ -21,7 +21,7 @@ Keep this schema-guided SQL application small, understandable, and safe.
 - A column change must update the external database and `COLUMN_GUIDE`, then
   restart the application.
 - Do not weaken `validate_sql`, `PRAGMA query_only`, or the SQLite authorizer.
-- Keep SQL limited to the fixed `data` table and cap returned rows.
+- Keep SQL limited to the fixed `data` table. Do not impose an application row cap.
 - Keep the frontend dependency-free unless a real requirement demands more.
 - Never commit `.env.local`, API keys, virtual environments, or real employee
   data. `main_datawarehouse.db` is intentionally tracked as a prebuilt sample

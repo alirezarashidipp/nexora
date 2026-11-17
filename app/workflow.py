@@ -3,7 +3,6 @@ from typing import Literal, NotRequired, TypedDict
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict, ValidationError
 
-from .config import MAX_RESULT_ROWS
 from .llm_connection import create_completion, llm_connection
 from .database import describe_table, execute_sql
 from .prompts import load_prompt, render_prompt
@@ -79,7 +78,7 @@ def query_database(state: WorkflowState) -> dict:
     with llm_connection() as (client, model):
         response = create_completion(
             client, model,
-            render_prompt("sql_generation", schema=state["schema"], max_rows=MAX_RESULT_ROWS),
+            render_prompt("sql_generation", schema=state["schema"]),
             state["normalized_question"],
             json_schema=SqlQuery.model_json_schema(),
         )

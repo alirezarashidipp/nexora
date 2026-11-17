@@ -50,9 +50,45 @@ def read_temperature() -> float:
     return temperature
 
 
+def create_openai_client():
+    api_key = required_setting("OPENAI_API_KEY")
+    model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip()
+    if not model:
+        raise LLMConfigurationError("OPENAI_MODEL must not be blank.")
+
+    client = OpenAI(api_key=api_key, timeout=60, max_retries=1)
+    return client, model
+
+
+def create_azure_client(resources):
+    if "AZURE_OPENAI_AD_TOKEN" in os.environ:
+        raise LLMConfigurationError(
+            "Remove AZURE_OPENAI_AD_TOKEN; Azure requires the refreshing token provider."
+        )
+    required_setting("AZURE_TENANT_ID")
+    required_setting("AZURE_CLIENT_ID")
+    required_setting("AZURE_CLIENT_SECRET")
+    scope = required_setting("AZURE_OPENAI_TOKEN_SCOPE")
+    endpoint = required_setting("AZURE_OPENAI_ENDPOINT")
+    api_version = required_setting("AZURE_OPENAI_API_VERSION")
+    model = required_setting("AZURE_OPENAI_DEPLOYMENT")
+
+    credential = EnvironmentCredential()
+    resources.callback(credential.close)
+    token_provider = get_bearer_token_provider(credential, scope)
+    client = AzureOpenAI(
+        azure_endpoint=endpoint,
+        api_version=api_version,
+        azure_ad_token_provider=token_provider,
+        timeout=60,
+        max_retries=1,
+    )
+    return client, model
+
+
 @contextmanager
 def llm_connection():
-    """Yield one reusable (client, model) pair and always close its resources."""
+    """Read settings, create the selected client, use it, then close resources."""
     load_local_env()
     provider = os.getenv("LLM_PROVIDER", "openai").strip()
     if provider not in {"openai", "azure"}:
@@ -62,33 +98,9 @@ def llm_connection():
     try:
         with ExitStack() as resources:
             if provider == "openai":
-                api_key = required_setting("OPENAI_API_KEY")
-                model = os.getenv("OPENAI_MODEL", "gpt-4.1-mini").strip()
-                if not model:
-                    raise LLMConfigurationError("OPENAI_MODEL must not be blank.")
-                client = OpenAI(api_key=api_key, timeout=60, max_retries=1)
+                client, model = create_openai_client()
             else:
-                # Validate everything before allocating resources or acquiring tokens.
-                if "AZURE_OPENAI_AD_TOKEN" in os.environ:
-                    raise LLMConfigurationError(
-                        "Remove AZURE_OPENAI_AD_TOKEN; Azure requires the refreshing token provider."
-                    )
-                for name in ("AZURE_TENANT_ID", "AZURE_CLIENT_ID", "AZURE_CLIENT_SECRET"):
-                    required_setting(name)
-                scope = required_setting("AZURE_OPENAI_TOKEN_SCOPE")
-                endpoint = required_setting("AZURE_OPENAI_ENDPOINT")
-                api_version = required_setting("AZURE_OPENAI_API_VERSION")
-                model = required_setting("AZURE_OPENAI_DEPLOYMENT")
-                credential = EnvironmentCredential()
-                resources.callback(credential.close)
-                token_provider = get_bearer_token_provider(credential, scope)
-                client = AzureOpenAI(
-                    azure_endpoint=endpoint,
-                    api_version=api_version,
-                    azure_ad_token_provider=token_provider,
-                    timeout=60,
-                    max_retries=1,
-                )
+                client, model = create_azure_client(resources)
             resources.callback(client.close)
             yield client, model
     except AzureError:
@@ -97,8 +109,8 @@ def llm_connection():
         raise LLMConnectionError("The LLM request failed. Check credentials, connectivity, and model parameter support.") from None
 
 
-def create_completion(client, model: str, instructions: str, task_data, *, json_schema=None):
-    """Return the raw SDK response; schemas and validation belong to the caller."""
+def build_completion_request(model, instructions, task_data, json_schema):
+    """Prepare messages and request parameters without making a request."""
     temperature = read_temperature()
     if isinstance(task_data, (dict, list)):
         task_data = json.dumps(task_data, ensure_ascii=False)
@@ -116,8 +128,15 @@ def create_completion(client, model: str, instructions: str, task_data, *, json_
             "type": "json_schema",
             "json_schema": {"name": "result", "schema": json_schema, "strict": True},
         }
+    return request
+
+
+def create_completion(client, model: str, instructions: str, task_data, *, json_schema=None):
+    """Build the request and return the raw SDK response for caller validation."""
+    request = build_completion_request(model, instructions, task_data, json_schema)
     try:
-        return client.chat.completions.create(**request)
+        response = client.chat.completions.create(**request)
+        return response
     except AzureError:
         raise LLMConnectionError("Azure authentication or token acquisition failed. Check the Azure configuration and access.") from None
     except OpenAIError:

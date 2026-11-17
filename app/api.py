@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from openai import OpenAIError
 from pydantic import BaseModel, Field
 
-from .config import MAX_QUESTION_LENGTH, STATIC_DIR
+from .config import STATIC_DIR
 from .llm_connection import LLMConfigurationError, LLMConnectionError
 from .database import describe_table, table_schema
 from .schema import EXAMPLE_QUESTIONS, TABLE_NAME
@@ -15,7 +15,7 @@ from .workflow import question_graph
 
 
 class QuestionRequest(BaseModel):
-    question: str = Field(min_length=2, max_length=MAX_QUESTION_LENGTH)
+    question: str = Field(min_length=2)
 
 
 @asynccontextmanager
@@ -39,7 +39,6 @@ def schema():
         "table": TABLE_NAME,
         "columns": table_schema(),
         "examples": EXAMPLE_QUESTIONS,
-        "max_question_length": MAX_QUESTION_LENGTH,
     }
 
 

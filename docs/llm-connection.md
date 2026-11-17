@@ -2,6 +2,8 @@
 
 `app/llm_connection.py` contains plain functions using the official OpenAI Python
 SDK and azure-identity. It has no application prompts or output validation.
+The flow is explicit: load settings, create the selected client, use it, close
+resources. Separate functions build requests and make SDK calls in the same file.
 
 ```python
 from app.llm_connection import create_completion, llm_connection

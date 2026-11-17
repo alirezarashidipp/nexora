@@ -13,17 +13,7 @@ def required_env(name: str) -> str:
     return value
 
 
-def positive_int(name: str) -> int:
-    value = int(required_env(name))
-    if value < 1:
-        raise ValueError(f"{name} must be a positive integer.")
-    return value
-
-
 load_local_env()
-
-MAX_QUESTION_LENGTH = positive_int("MAX_QUESTION_LENGTH")
-MAX_RESULT_ROWS = positive_int("MAX_RESULT_ROWS")
 
 DB_PATH = Path(required_env("DATABASE_PATH"))
 if not DB_PATH.is_absolute():

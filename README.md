@@ -75,8 +75,6 @@ into `.env` if upgrading an older checkout. Docker Compose also uses `.env`.
 | `AZURE_OPENAI_DEPLOYMENT` | Required Azure deployment name, used as the request model |
 | `HTTPS_PROXY`, `NO_PROXY` | Optional corporate proxy settings |
 | `DATABASE_PATH` | Required existing SQLite file; example: `main_datawarehouse.db` |
-| `MAX_QUESTION_LENGTH` | Required positive input limit; example: `500` |
-| `MAX_RESULT_ROWS` | Required positive row cap; example: `100` |
 
 All required values reject blanks. Change provider through configuration and restart.
 The selected model/deployment must support Chat Completions, temperature,
