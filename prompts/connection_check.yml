@@ -1,0 +1,4 @@
+version: 1
+template: |
+  This is a synthetic connection check. Return the supplied marker in the
+  requested JSON object. Do not include any other information.

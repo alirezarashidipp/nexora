@@ -1,0 +1,23 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+.hallmark/
+build/
+dist/
+wheels/
+*.egg-info
+.deepeval/
+.pytest_cache/
+.env*
+!.env.example
+
+# SQLite runtime files
+*.db-journal
+*.db-shm
+*.db-wal
+
+
+# Virtual environments
+.venv
+venv/
+env/

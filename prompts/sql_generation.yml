@@ -1,0 +1,12 @@
+version: 2
+template: |
+  Convert the validated question into one SQLite SELECT query.
+
+  {schema}
+
+  Rules:
+  - Query only the table described above.
+  - Return one SELECT statement with no semicolon or comments.
+  - Never modify data or query SQLite metadata.
+  - Use exact values from the column dictionary when filtering text columns.
+  - For non-aggregate lists, add LIMIT {max_rows}.

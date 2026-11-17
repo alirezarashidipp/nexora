@@ -1,0 +1,60 @@
+# Security
+
+## Trust model
+
+User questions and all model output are untrusted. This schema-guided SQL
+application is designed for local use with sample data, not for public access
+or sensitive employee records.
+
+## Existing controls
+
+1. FastAPI limits question length.
+2. Structured model output constrains validation status and SQL shape.
+3. `validate_sql()` accepts one comment-free `SELECT`, and execution requires
+   a real read from the fixed `data` table rather than a table name inside text.
+4. The existing SQLite file is opened with URI `mode=ro` and
+   `PRAGMA query_only = ON`.
+5. A SQLite authorizer denies reads from other tables and all SQLite write
+   actions.
+6. `MAX_RESULT_ROWS` caps returned rows.
+7. Both providers use `store=False`; raw provider errors are not returned to clients.
+8. `.env.local`, `.env`, and virtual environments are excluded from Git and Docker.
+9. Docker runs the application as a non-root user.
+
+Prompt rules are helpful but are not a security boundary. Do not remove the
+independent SQL and SQLite controls.
+
+## Secrets
+
+- Store `OPENAI_API_KEY` and `AZURE_CLIENT_SECRET` only in ignored `.env` files or the
+  deployment secret store.
+- Never paste keys into issues, logs, screenshots, prompts, or committed files.
+- Revoke a key immediately if it is exposed.
+- `.env.example` must contain names and safe defaults only.
+
+## Known gaps
+
+- `/ask` and `/schema` have no authentication.
+- There is no rate limiting, usage quota, or cost ceiling.
+- SDK requests use a 60-second timeout and at most one retry. This is not a
+  whole-workflow deadline; SQLite still has no execution timeout.
+- There is no request-level audit trail or security monitoring.
+- The returned SQL and rows are visible in the frontend debug panel.
+
+Bind to localhost unless a trusted gateway supplies the missing controls.
+
+## Reporting
+
+Do not include secrets or real employee data in a report. For this small
+schema-guided SQL application, open a private report with the repository owner
+before publishing a security issue.
+
+## LLM authentication and diagnostics
+
+Azure uses `EnvironmentCredential` and `get_bearer_token_provider`; tokens are
+acquired lazily and refreshed by the library. Clients and credentials close on
+context exit, including failed calls. Authentication errors are mapped to safe
+application messages. SDK diagnostic logger levels are set to CRITICAL to avoid
+routine request/authentication details. Do not enable verbose SDK logging with
+real data or credentials. No application code logs prompts, responses, keys, or tokens.
+The opt-in connection check sends only a fixed synthetic marker and never reads SQLite.

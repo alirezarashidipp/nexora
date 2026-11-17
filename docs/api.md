@@ -1,0 +1,78 @@
+# API
+
+FastAPI serves the frontend and JSON endpoints. When running locally, Swagger UI
+is available at <http://127.0.0.1:8000/docs>.
+
+## `GET /`
+
+Returns `static/index.html`.
+
+## `GET /schema`
+
+Returns the fixed `data` table, its live SQLite columns combined with
+`COLUMN_GUIDE`, example questions, and the maximum question length.
+
+Example response:
+
+```json
+{
+  "table": "data",
+  "columns": [
+    {
+      "name": "EMPLOYEE_ID",
+      "type": "INTEGER PRIMARY KEY",
+      "description": "Unique numeric identifier for one employee.",
+      "possible_values": "Integer IDs from 1001 to 1100 in the demo data."
+    },
+    {
+      "name": "EMPLOYEE_NAME",
+      "type": "TEXT NOT NULL",
+      "description": "Synthetic full name of the employee.",
+      "possible_values": "100 fictional demo names, such as AVA CARTER and LEO KOWALSKI."
+    }
+  ],
+  "examples": ["How many coders?"],
+  "max_question_length": 500
+}
+```
+
+## `POST /ask`
+
+Request:
+
+```json
+{
+  "question": "How many coders are in MSW?"
+}
+```
+
+Successful response:
+
+```json
+{
+  "question": "How many coders are in MSW?",
+  "normalized_question": "How many CODER employees are in MSW?",
+  "status": "valid",
+  "answer": "There are 20 coders in MSW.",
+  "sql": "SELECT COUNT(*) AS total FROM data WHERE STATUS = 'CODER' AND DEPARTMENT = 'MSW'",
+  "rows": [{"total": 20}]
+}
+```
+
+`status` is one of:
+
+- `valid`: SQL was generated and executed.
+- `incomplete`: the response asks one clarification; `sql` is `null`.
+- `invalid`: the request is outside the fixed `data` table or requests a write;
+  `sql` is `null`.
+
+## Errors
+
+| Status | Meaning |
+| --- | --- |
+| `400` | Workflow or SQL validation rejected the request |
+| `422` | Request body or question length failed API validation |
+| `500` | Selected provider settings or temperature are missing/invalid |
+| `502` | LLM provider/authentication or SQLite failed; raw provider details are hidden |
+
+The endpoint is synchronous and each request is independent.

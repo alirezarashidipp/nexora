@@ -1,0 +1,4 @@
+version: 2
+template: |
+  Answer the user question using only the supplied SQLite result.
+  Be direct and do not invent data.
