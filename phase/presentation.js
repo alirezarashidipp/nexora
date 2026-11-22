@@ -10,6 +10,7 @@ const capabilities = [
   ["Simulate", "Test a portfolio decision", ["Vary headcount, team capacity and talent sourcing."]],
   ["Verify", "Demonstrate accuracy and value", ["Measure accuracy and compare with existing tools."]]
 ];
+const degreesPerCapability = 360 / capabilities.length;
 
 const ns = "http://www.w3.org/2000/svg";
 function svgPart(parent, tag, attributes) {
@@ -39,11 +40,11 @@ function drawCover() {
   }
 }
 drawCover();
-function syncCoverMotion() {
-  byId("orbit-lines").classList.toggle("paused", document.hidden);
+function syncMotionVisibility() {
+  document.documentElement.classList.toggle("motion-paused", document.hidden);
 }
-document.addEventListener("visibilitychange", syncCoverMotion);
-syncCoverMotion();
+document.addEventListener("visibilitychange", syncMotionVisibility);
+syncMotionVisibility();
 
 let chapter = 0;
 let mapOpen = false;
@@ -55,10 +56,14 @@ function selectCapability(index) {
     const li = document.createElement("li"); li.textContent=point; return li;
   }));
   document.querySelectorAll(".node").forEach((node,i)=>node.setAttribute("aria-pressed", String(i===index)));
+  byId("active-spoke").setAttribute("transform", `rotate(${index * degreesPerCapability})`);
+  for (const animation of byId("signal-dot").getAnimations()) {
+    animation.currentTime = 0;
+  }
 }
 capabilities.forEach(([name],index)=>{
   const node = document.createElement("button");
-  const angle = (index*60-90)*Math.PI/180;
+  const angle = (index * degreesPerCapability - 90) * Math.PI / 180;
   node.className = "node";
   node.style.left = (50+39*Math.cos(angle))+"%";
   node.style.top = (50+39*Math.sin(angle))+"%";

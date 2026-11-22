@@ -34,7 +34,21 @@
       <h2>Capability map</h2>
       <div class="map-detail" aria-live="polite"><span id="cap-index"></span><h3 id="cap-title"></h3><ul id="cap-points"></ul></div>
     </div>
-    <div class="wheel"><div class="wheel-inner"><div class="spokes" aria-hidden="true"></div><div class="wheel-core"><img src="crystal.png" alt=""><strong>NEXORA</strong></div><div id="nodes" role="group" aria-label="Capabilities"></div></div></div>
+    <div class="wheel">
+      <div class="wheel-inner">
+        <div class="spokes" aria-hidden="true"></div>
+        <svg class="wheel-paths" viewBox="-50 -50 100 100" aria-hidden="true" focusable="false">
+          <circle r="24.8" fill="none" stroke="#c4c7c6" stroke-dasharray="2 3" vector-effect="non-scaling-stroke"/>
+          <circle class="map-orbit-dot" cx="24.8" r=".65" fill="#8e9b9c"/>
+          <g id="active-spoke">
+            <path d="M0 -14V-30" stroke="currentColor" stroke-opacity=".55" stroke-width="1.5" vector-effect="non-scaling-stroke"/>
+            <circle id="signal-dot" cy="-14" r=".75" fill="currentColor"/>
+          </g>
+        </svg>
+        <div class="wheel-core"><img src="crystal.png" alt=""><strong>NEXORA</strong></div>
+        <div id="nodes" role="group" aria-label="Capabilities"></div>
+      </div>
+    </div>
   </section>
   <section id="secondary" hidden></section>
 </main>
