@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#ffffff"><title>NEXORA | Product roadmap</title>
+<link rel="icon" href="data:,"><link rel="stylesheet" href="presentation.css"><link rel="stylesheet" href="sections.css">
+<script defer src="sections.js"></script><script defer src="presentation.js"></script>
+</head>
+<body>
+<header class="masthead">
+  <a class="brand" href="#overview" aria-label="HSBC — return to overview"><img src="hsbc.svg" alt="HSBC"></a>
+  <nav class="chapters" aria-label="Presentation chapters">
+    <a href="#overview">Overview</a>
+    <a href="#question-policy">How Nexora handles a question</a>
+    <span class="nav-divider" aria-hidden="true"></span><a href="#p0" aria-label="P0 — Next demo">P0</a><a href="#p1" aria-label="P1 — Next release">P1</a><a href="#p2" aria-label="P2 — Differentiation">P2</a>
+  </nav>
+</header>
+<main id="canvas" tabindex="-1">
+  <section id="cover" aria-labelledby="cover-title">
+    <div class="folio"><i></i>Product roadmap</div>
+    <div class="blueprint" aria-hidden="true"><svg viewBox="0 0 1300 600" preserveAspectRatio="xMidYMid slice" id="orbit-lines"></svg></div>
+    <div class="cover-content">
+      <h1 id="cover-title"><button id="cover-trigger" aria-label="NEXORA — reveal the six capabilities">
+        <img class="jewel" src="crystal.png" alt="" width="240" height="160">
+        <span>NEXORA</span>
+      </button></h1>
+      <p class="expansion">Notice · Explain · eXplore · Optimise · Recommend · Act</p>
+      <button id="explore" class="primary-action">Explore capabilities <span aria-hidden="true">↗</span></button>
+    </div>
+  </section>
+  <section id="map" hidden aria-label="Capability map">
+    <div class="map-copy">
+      <button id="back" class="back">← &nbsp; Overview</button>
+      <h2>Capability map</h2>
+      <div class="map-detail" aria-live="polite"><span id="cap-index"></span><h3 id="cap-title"></h3><ul id="cap-points"></ul></div>
+    </div>
+    <div class="wheel"><div class="wheel-inner"><div class="spokes" aria-hidden="true"></div><div class="wheel-core"><img src="crystal.png" alt=""><strong>NEXORA</strong></div><div id="nodes" role="group" aria-label="Capabilities"></div></div></div>
+  </section>
+  <section id="secondary" hidden></section>
+</main>
+<div id="print-deck"></div></body></html>

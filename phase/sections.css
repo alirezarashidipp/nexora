@@ -1,0 +1,68 @@
+#secondary:has(> .phase-slide) { display: grid; min-height: 100%; }
+.phase-slide {
+  width: min(100%, 1550px);
+  margin: 0 auto;
+  padding: clamp(24px, 4.5vh, 64px) clamp(24px, 5vw, 80px);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-content: center;
+  align-items: start;
+  gap: clamp(32px, 4vw, 76px);
+  color: #1b2023;
+}
+.phase-intro { grid-column: 1 / -1; }
+.question-policy {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3,minmax(0,1fr));
+  gap: 3vw;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.question-policy li { border-top: 2px solid #c60022; padding-top: 16px; font-size: clamp(18px,1.6vw,26px); line-height: 1.45; color: #414749; }
+.question-policy strong { color: #1b2023; }
+.phase-horizon {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 14px;
+  color: #575e61;
+  font: 700 11px/1.25 Arial, sans-serif;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.phase-horizon strong {
+  display: inline-block;
+  color: #b8001e;
+  font: 700 20px/1 Consolas, monospace;
+  letter-spacing: -.05em;
+}
+.phase-horizon span { border-left: 1px solid #bfc3c2; padding-left: 12px; }
+.phase-intro h1 {
+  margin: 0;
+  color: #171b1f;
+  font-size: clamp(43px, 4.2vw, 70px);
+  line-height: .99;
+  letter-spacing: -.058em;
+  text-wrap: balance;
+}
+.phase-scope { padding: 13px 0 15px; border-top: 1px solid #cbd0ce; }
+.phase-scope:last-child { padding-bottom: 0; }
+.phase-scope h2 { margin: 0 0 8px; font-size: clamp(22px,1.9vw,30px); letter-spacing: -.022em; }
+.phase-scope ul { margin: 0; padding-left: 17px; list-style: square; }
+.phase-scope li {
+  color: #414749;
+  font-size: clamp(18px,1.55vw,25px);
+  line-height: 1.4;
+  padding-left: 1px;
+  margin: 4px 0;
+}
+.phase-scope li::marker { color: #c60022; font-size: .72em; }
+@media print {
+  :root:has(#print-deck .phase-slide) { background: white; }
+  .phase-slide { min-height: 185mm; width: 100%; padding: 8mm 0; gap: 7mm; background: white; }
+  .phase-slide .phase-intro h1 { font-size: 35pt; margin-bottom: 7mm; }
+  .phase-scope h2 { font-size: 15pt; }
+  .phase-scope li { font-size: 11pt; }
+}
