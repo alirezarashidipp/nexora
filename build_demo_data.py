@@ -9,7 +9,7 @@ from datetime import date, timedelta
 from pathlib import Path
 
 from app.catalogue import CITIES, DASHBOARDS, DEMO_DIR, ROLES, TEAMS, dashboard_sources
-from app.schema import DEMO_COLUMNS, DEMO_KEYS
+from app.schema import DEMO_COLUMNS, DEMO_KEYS, OFFICES
 
 
 def sample_rows() -> dict[str, list]:
@@ -18,12 +18,13 @@ def sample_rows() -> dict[str, list]:
     week = date(2026, 11, 16)
     days = [(week + timedelta(days=i)).isoformat() for i in range(5)]
     for i, (city, office) in enumerate(offices):
-        rows["locations.offices"].append((office, city, office, "GB", "Europe/London", 8 + i, 96 + 12*i, 3200 + 350*i))
-        rows["external.holiday_calendar"].append((office, "2026-11-23", "Demo office day", "Local", "GB", "ENG", 1, "Demo calendar"))
+        _, country, timezone, region = OFFICES[city]
+        rows["locations.offices"].append((office, city, office, country, timezone, 8 + i, 96 + 12*i, 3200 + 350*i))
+        rows["external.holiday_calendar"].append((office, "2026-11-23", "Demo office day", "Local", country, region, 1, "Demo calendar"))
     visits = rows["workforce.badge_visits"]
     team_capacity = {team: 0.0 for team in TEAMS}
     for i in range(12):
-        city, office = offices[i % 3]
+        city, office = offices[i % len(offices)]
         active = int(i != 10)
         team = TEAMS[(i // 2) % 3]
         worker_fte = 0.8 if i % 3 == 0 else 1.0
@@ -35,9 +36,9 @@ def sample_rows() -> dict[str, list]:
         team_capacity[team] += worker_fte
         weekdays = [0] * 5
         if i != 11:
-            weekdays[i % 5] = 1
+            weekdays[i % 3] = 1
             if i < 7:
-                weekdays[(i+2) % 5] = 1
+                weekdays[(i+2) % 3] = 1
         rows["workforce.weekly_schedule"].append((i+1, days[0], *weekdays, "Hybrid" if any(weekdays) else "Remote"))
         for weekday, planned in enumerate(weekdays):
             if planned:
@@ -45,7 +46,7 @@ def sample_rows() -> dict[str, list]:
                 visits.append((len(visits)+1, i+1, site, days[weekday], "09:00", "16:30",
                                "Home" if site == office else "Visiting", "Demo badge reader"))
     for i, (_, office) in enumerate(offices):
-        for j, workday in enumerate(days):
+        for j, workday in enumerate(days[:3]):
             people = {v[1] for v in visits if v[2] == office and v[3] == workday}
             headcount = len(people)
             energy = 12 + i*2 + 3.5*headcount
@@ -56,7 +57,7 @@ def sample_rows() -> dict[str, list]:
     for i, name in enumerate(("Harbour", "Meridian", "Orchard", "Copper", "Beacon", "Willow")):
         pid = f"P{i+1:02}"
         team = TEAMS[i % 3]
-        office = offices[i % 3][1]
+        office = offices[i % len(offices)][1]
         assigned = round(team_capacity[team] / 2, 2)
         gap = (i % 3) * 0.5
         due = (week + timedelta(days=42 + 7*i)).isoformat()

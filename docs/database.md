@@ -15,10 +15,15 @@ aggregation grain, approved many-to-one paths and dashboard-to-table mappings.
 | facilities.db | office_daily_metrics | Office and local date |
 | external.db | weather_daily, holiday_calendar | City and date, office and holiday date |
 
-Manchester, Bristol and London each have one fictional office. The observations
-cover 16–20 November 2026. Badge entries determine daily attendance. Rainy-day
-attendance joins both city and local date. Comparing attendance across days counts
-person-days. Workforce headcount counts distinct active employees at their home office.
+London (LON), Manchester (MAN), Dubai (DXB), Mumbai (BOM), Bengaluru (BLR) and
+Shanghai (SHA) each have one fictional office. Office records carry their country
+and IANA timezone. Holiday records use the local country and region.
+
+The weekly schedule starts on 16 November 2026. Facilities and weather contain the
+same three observed days, 16–18 November, in all six offices (18 rows per table).
+Badge entries determine daily attendance. Rainy-day attendance joins both city and
+local date. Attendance summed across days counts person-days. Workforce headcount
+counts distinct active employees at their home office.
 
 Rebuild into a new directory with `python build_demo_data.py --output demo_rebuilt`.
 The builder uses fixed dates and inputs, validates all ten tables and join

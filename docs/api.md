@@ -19,7 +19,7 @@ and its own checkpoint. Arbitrary client state never becomes conversation memory
 {
   "threadId": "056d8656-a33e-46bb-a9e4-60a547dfacf9",
   "runId": "8ea2878a-f074-4efb-88a2-f4af9b0b497e",
-  "messages": [{"id": "q1", "role": "user", "content": "How many active employees are in Bristol?"}],
+  "messages": [{"id": "q1", "role": "user", "content": "How many active employees are in Bengaluru?"}],
   "forwardedProps": {"action": "discover"}
 }
 ```
@@ -27,15 +27,24 @@ and its own checkpoint. Arbitrary client state never becomes conversation memory
 | Action | Input | Result |
 | --- | --- | --- |
 | `discover` | First question in a new thread | Ranked dashboard metadata |
-| `select` | `forwardedProps.dashboard` from the recommendations | Synchronised selection |
+| `select` | Recommended ID in `state.selected` (also accepts `forwardedProps.dashboard`) | Synchronised selection |
 | `answer_here` | Same thread, optional original message | Answer to the original question or a clarification |
 | `followup` | New user message, same thread | Contextual analysis or a clarification |
 | `restore` | Thread ID and empty messages | Current view, or a fresh view for an expired thread |
 
-A successful stream emits `RUN_STARTED`, `STATE_SNAPSHOT`, then `RUN_FINISHED`.
-An execution failure emits `RUN_ERROR` and preserves the previous successful turn.
-A malformed request receives HTTP 422. SQL parameters are positional in the
-order shown. `GET /conversation/examples` returns the four offline demo questions.
+The adapter emits `RUN_STARTED`, `STEP_STARTED` and `STEP_FINISHED` for executed
+graph nodes, shared `STATE_SNAPSHOT` events, a `MESSAGES_SNAPSHOT` and `RUN_FINISHED`.
+A discovery snapshot includes `discovery_mode` (`semantic` or `keyword_fallback`) and
+ranked dashboard cards. An answer snapshot includes `evidence.sql`, `parameters`,
+`rows`, `sources`, the definition and units. Custom field plans support grouped or detail
+rows. When a clarification sets `needs_prior_question`, the browser may echo the
+previous wording in `forwardedProps.prior_question` on the next follow-up. The server
+verifies it against the pending question's fingerprint. Parameters appear in their SQLite binding order. Client-provided filters, SQL and
+history cannot replace server state.
+
+A failed run emits `RUN_ERROR` and preserves the previous committed turn. The client
+can retry with the same run ID. A malformed request receives HTTP 422. The examples from
+`GET /conversation/examples` are starter text and follow the usual model and query path.
 
 ## `GET /schema`
 

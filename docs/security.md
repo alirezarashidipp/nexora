@@ -25,17 +25,26 @@ independent SQL and SQLite controls.
 
 ## Conversation workspace
 
-The conversation route builds SQL from reviewed catalogue expressions and join
-keys. User and model input can supply validated filter values, bound as SQLite
-parameters. Each asset is attached using a fixed file name and URI `mode=ro`.
-The connection enables `query_only`. Its authorizer checks the database, table,
-column and allowed aggregate functions for this plan. The original `/ask`
-validator and fixed-table authorizer continue to guard the employee path.
+Discovery sends only the question, dashboard IDs, titles, descriptions, KPI labels
+and keywords to the provider. It validates every returned ID against the catalogue.
+For analysis the server validates the selected base table and every step of a reviewed
+many-to-one join path before loading its schemas. Both keys are required for the
+city-and-date weather join.
+
+Defined metrics compile from reviewed expressions. For custom analyses the model
+chooses fields, aggregate operations, filter operators and sort positions. The
+compiler checks each identifier against the scoped tables and binds filter values
+and any requested limit. The model cannot submit executable SQL or its own join text.
+Each fixed asset opens with URI `mode=ro` and `PRAGMA query_only=ON`. The SQLite
+authorizer checks database, table, column and allowed functions. The legacy fixed-table
+validator and authorizer continue to guard the employee path.
 
 Only short questions consisting of the public demo vocabulary and calendar dates
 are retained verbatim. Other original wording stays in the current browser page
 until Answer Here, which verifies it against a keyed fingerprint. After a reload
-the user may need to re-enter that wording. The graph stores bounded business
+the user may need to re-enter that wording. While a clarification is open, the page
+can echo its prior question on the next turn. The server accepts it only if its
+keyed fingerprint matches that thread's pending question. The graph stores bounded business
 context. Raw rows, SQL, schemas, provider output and unrestricted free text stay
 outside checkpoints. General phrasing is processed by the configured provider.
 

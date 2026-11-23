@@ -1,5 +1,17 @@
 TABLE_NAME = "data"
 
+# Office code, country, IANA timezone and region in the synthetic portfolio.
+OFFICES = {
+    "London": ("LON", "GB", "Europe/London", "ENG"),
+    "Manchester": ("MAN", "GB", "Europe/London", "ENG"),
+    "Dubai": ("DXB", "AE", "Asia/Dubai", "DU"),
+    "Mumbai": ("BOM", "IN", "Asia/Kolkata", "MH"),
+    "Bengaluru": ("BLR", "IN", "Asia/Kolkata", "KA"),
+    "Shanghai": ("SHA", "CN", "Asia/Shanghai", "SH"),
+}
+CITIES = {city: site[0] for city, site in OFFICES.items()}
+office_codes = ", ".join(CITIES.values())
+
 
 # The five conversation databases are prebuilt fixtures, separate from /ask.
 def column(data_type, description, aliases, possible_values, unit=""):
@@ -8,12 +20,12 @@ def column(data_type, description, aliases, possible_values, unit=""):
 
 
 employee_id = column("INTEGER", "Fictional worker key.", ["worker id"], "1 to 12")
-office_id = column("TEXT", "Key of a physical office.", ["site id"], "LON, BRS, MAN")
-city_code = column("TEXT", "City identifier.", ["city"], "LON, BRS, MAN")
+office_id = column("TEXT", "Key of a physical office.", ["site id"], office_codes)
+city_code = column("TEXT", "City identifier.", ["city"], office_codes)
 team_id = column("TEXT", "Delivery team identifier.", ["team"], "Platform, Delivery, Insights")
 job_role = column("TEXT", "Job family.", ["job", "position"], "Engineer, Analyst, Planner")
 project_id = column("TEXT", "Portfolio project key.", ["project"], "P01 to P06")
-country = column("TEXT", "ISO country code.", ["country"], "GB")
+country = column("TEXT", "ISO country code.", ["country"], "GB, AE, IN, CN")
 day = column("TEXT", "Local calendar date.", ["date", "day"], "ISO YYYY-MM-DD", "day")
 onsite = column("INTEGER", "Planned attendance on this weekday.", ["office day"], "0 = offsite, 1 = onsite", "day")
 fte = column("REAL", "Full-time equivalent capacity.", ["full-time equivalent"], "Non-negative decimal", "FTE")
@@ -22,8 +34,8 @@ fte = column("REAL", "Full-time equivalent capacity.", ["full-time equivalent"],
 DEMO_COLUMNS = {
     "workforce.employees": {
         "employee_id": employee_id, "team_id": team_id, "role": job_role,
-        "home_office_id": column("TEXT", "Office of assignment.", ["home site"], "LON, BRS, MAN"),
-        "contract_city": column("TEXT", "City on the work contract.", ["contract location"], "London, Bristol, Manchester"),
+        "home_office_id": column("TEXT", "Office of assignment.", ["home site"], office_codes),
+        "contract_city": column("TEXT", "City on the work contract.", ["contract location"], ", ".join(CITIES)),
         "worker_type": column("TEXT", "Engagement type.", ["employment type"], "Employee, Contractor"),
         "fte": fte, "active": column("INTEGER", "Worker included in the current workforce snapshot.", ["active worker"], "0 = inactive, 1 = active"),
     },
@@ -34,16 +46,16 @@ DEMO_COLUMNS = {
     },
     "workforce.badge_visits": {
         "visit_id": column("INTEGER", "Unique building visit.", ["entry id"], "Positive integer"),
-        "employee_id": employee_id, "visited_office_id": column("TEXT", "Office actually entered.", ["visited site"], "LON, BRS, MAN"),
+        "employee_id": employee_id, "visited_office_id": column("TEXT", "Office actually entered.", ["visited site"], office_codes),
         "visit_date": day, "check_in": column("TEXT", "Local arrival time.", ["arrival"], "HH:MM"),
         "check_out": column("TEXT", "Local departure time.", ["departure"], "HH:MM"),
         "visit_type": column("TEXT", "Visit relative to home office.", ["visit category"], "Home, Visiting"),
         "source": column("TEXT", "Synthetic access system.", ["badge system"], "Demo badge reader"),
     },
     "locations.offices": {
-        "office_id": office_id, "office_name": column("TEXT", "Display name of the office.", ["site"], "London, Bristol, Manchester"),
+        "office_id": office_id, "office_name": column("TEXT", "Display name of the office.", ["site"], ", ".join(CITIES)),
         "city_code": city_code, "country_code": country,
-        "timezone": column("TEXT", "IANA office time zone.", ["time zone"], "Europe/London"),
+        "timezone": column("TEXT", "IANA office time zone.", ["time zone"], ", ".join(dict.fromkeys(site[2] for site in OFFICES.values()))),
         "seat_capacity": column("INTEGER", "Available workstations.", ["desks", "seats"], "Positive integer", "seats"),
         "floor_area_sqm": column("REAL", "Internal floor area.", ["floor space"], "Positive decimal", "m²"),
         "monthly_rent_gbp": column("REAL", "Contracted rent per month.", ["rent"], "Non-negative decimal", "GBP/month"),
@@ -59,8 +71,8 @@ DEMO_COLUMNS = {
         "keywords_json": column("TEXT", "Search vocabulary.", ["aliases"], "JSON string array"),
     },
     "portfolio.portfolio_projects": {
-        "project_id": project_id, "project_name": column("TEXT", "Fictional portfolio initiative.", ["initiative"], "Named demo project"),
-        "team_id": team_id, "lead_office_id": column("TEXT", "Office accountable for delivery.", ["lead site"], "LON, BRS, MAN"),
+        "project_id": project_id, "project_name": column("TEXT", "Fictional portfolio initiative.", ["initiative"], "Harbour, Meridian, Orchard, Copper, Beacon, Willow"),
+        "team_id": team_id, "lead_office_id": column("TEXT", "Office accountable for delivery.", ["lead site"], office_codes),
         "required_fte": column("REAL", "Capacity needed to deliver the project.", ["demand"], "Non-negative decimal", "FTE"),
         "assigned_fte": column("REAL", "Capacity already allocated to the project.", ["allocation"], "Non-negative decimal", "FTE"),
         "due_date": column("TEXT", "Planned project delivery date.", ["deadline"], "ISO YYYY-MM-DD", "day"),
@@ -92,9 +104,9 @@ DEMO_COLUMNS = {
     },
     "external.holiday_calendar": {
         "office_id": office_id, "holiday_date": day,
-        "holiday_name": column("TEXT", "Fictional closure or observance.", ["holiday"], "Named demo event"),
+        "holiday_name": column("TEXT", "Fictional closure or observance.", ["holiday"], "Demo office day"),
         "holiday_type": column("TEXT", "Kind of calendar event.", ["event type"], "Local, Observance"),
-        "country_code": country, "region_code": column("TEXT", "Office region.", ["region"], "ENG"),
+        "country_code": country, "region_code": column("TEXT", "Office region.", ["region"], "ENG, DU, MH, KA, SH"),
         "office_closed": column("INTEGER", "Office unavailable on this date.", ["closure"], "0 = open, 1 = closed"),
         "source": column("TEXT", "Calendar owner.", ["calendar source"], "Demo calendar"),
     },
@@ -108,12 +120,12 @@ DEMO_KEYS = {
     "external.weather_daily": ("city_code", "date"), "external.holiday_calendar": ("office_id", "holiday_date"),
 }
 
-DEMO_EXAMPLES = {
-    "How many active employees are in Bristol?": ("workforce", "employees"),
-    "What was the energy cost in Manchester?": ("cost", "energy_cost"),
-    "What was rainy-day attendance in Bristol?": ("weather", "rain_attendance"),
-    "What is the project staffing gap in London?": ("portfolio", "staffing_gap"),
-}
+DEMO_EXAMPLES = (
+    "How many active employees are in Dubai?",
+    "What was the energy cost in Manchester?",
+    "What was rainy-day attendance in Mumbai?",
+    "What is the project staffing gap in Shanghai?",
+)
 
 
 COLUMN_GUIDE = {

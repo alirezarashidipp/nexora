@@ -5,15 +5,20 @@ threaded analysis. The employee workspace is available at `/employees`.
 
 ## Try a conversation
 
-1. Ask **How many active employees are in Bristol?**
-2. Choose **Workforce footprint**, then **Answer Here**. The result is **3 people**.
-3. Ask **Compare it with London.** Nexora returns **Bristol 3, London 4**.
-4. Expand **SQL and evidence** to see the query, bound parameters and returned rows.
+With a configured OpenAI or Azure OpenAI provider:
 
-The four suggested questions and city comparisons run locally on the synthetic
-assets. Other phrasing uses the configured OpenAI or Azure provider to interpret
-the question. **New conversation** starts an independent thread. One server
-process holds up to 64 conversations in RAM. Restarting it clears their memory.
+1. Ask **How many active employees are in Bengaluru?**
+2. Select **Workforce footprint** and choose **Answer Here**. The synthetic data contains one active employee in Bengaluru.
+3. Ask **Compare it with London.** The same metric gives Bengaluru 1 and London 2.
+4. Expand **SQL and evidence** to inspect the query, parameters and rows.
+
+Dashboard discovery sends the question and ten compact dashboard descriptions to the model.
+The workspace labels the result **Semantic match** or **Keyword fallback**. A provider outage
+still allows keyword discovery. Answer Here and follow-ups need a working model, including
+when using a suggested question. A missing dashboard match still allows analysis of the data.
+
+Each new conversation gets its own thread. One server process holds up to 64 conversations
+in RAM. Restarting it clears their memory.
 
 The catalogue contains ten fictional dashboards across five SQLite databases.
 For the exact schema, link configuration and reproducible build see

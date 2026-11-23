@@ -1,107 +1,111 @@
-"""Resolve a business question into one of the catalogue's aggregate measures."""
+"""Choose a dashboard from metadata, then plan an analysis when the user asks."""
 
-import re
-
-from pydantic import BaseModel, ConfigDict
-
-from .catalogue import CITIES, DASHBOARDS, schema_context, source_tables
-from .demo_queries import Plan, dimensions, new_plan
-from .llm_connection import create_completion, llm_connection
+from .catalogue import CITIES, DASHBOARDS, JOINS, find_dashboards, schema_context
+from .demo_queries import Plan, dimensions, needed_joins
+from .field_queries import FieldPlan, Record, scope_tables
+from .llm_connection import LLMConfigurationError, LLMConnectionError, create_completion, llm_connection
 from .prompts import load_prompt
-from .schema import DEMO_EXAMPLES
+from .schema import DEMO_COLUMNS
 from .workflow import parse_output
 
 
-class Decision(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    plan: Plan | None
+class Matches(Record):
+    dashboard_ids: list[str]
+
+
+class Scope(Record):
+    base: str | None
+    joins: list[str]
     clarification: str | None
 
 
-def example_plan(question: str, report_id: str) -> Plan | None:
-    words = question.casefold().strip(" .?!")
-    for example, (report, metric) in DEMO_EXAMPLES.items():
-        if report != report_id:
+class Decision(Record):
+    plan: Plan | None
+    fields: FieldPlan | None
+    clarification: str | None
+
+
+TOPICS = {
+    "workforce.employees": "One worker per row. Current workforce, active status, home office, role and contracted capacity.",
+    "workforce.weekly_schedule": "One worker-week. Agreed working pattern and planned onsite weekdays.",
+    "workforce.badge_visits": "One building entry. Actual site visited, arrival and departure.",
+    "locations.offices": "One office. Location, timezone, seats, floor area and monthly rent.",
+    "portfolio.portfolio_projects": "One portfolio project. Priority, deadline, required and assigned staff.",
+    "portfolio.hiring_requests": "One requisition. Role, status, open capacity and expected start.",
+    "facilities.office_daily_metrics": "One office-day. Actual and peak attendance, energy, cost and data quality.",
+    "external.weather_daily": "One city-day. Temperature, rain, local alerts and observations.",
+    "external.holiday_calendar": "One office-date. Local public holidays and closures.",
+}
+
+
+def ask_model(prompt, payload, result_type):
+    try:
+        with llm_connection() as (client, model):
+            response = create_completion(client, model, load_prompt(prompt), payload,
+                                         json_schema=result_type.model_json_schema())
+    except (LLMConfigurationError, LLMConnectionError):
+        raise LLMConnectionError("The language service is unavailable.") from None
+    return parse_output(response, result_type)
+
+
+def discover(question: str, dashboards: list[dict]) -> tuple[list[str], str]:
+    keys = ("dashboard_id", "title", "description", "keywords", "kpi_tags")
+    compact = [{key: item[key] for key in keys} for item in dashboards]
+    known = {item["dashboard_id"] for item in compact}
+    try:
+        result = ask_model("dashboard_discovery", {"question": question, "catalogue": compact}, Matches)
+        ids = result.dashboard_ids
+        if len(ids) > 3 or len(set(ids)) != len(ids) or not set(ids) <= known:
+            raise ValueError("Invalid dashboard ranking.")
+        return ids, "semantic"
+    except (ValueError, LLMConnectionError):
+        return find_dashboards(question, dashboards), "keyword_fallback"
+
+
+def context_for_question(question, selected, memory):
+    return {"question": question, "selected_dashboard": selected or None,
+            "original_question": memory.get("original_question", ""),
+            "pending_question": memory.get("pending", ""), "last_clarification": memory.get("notice", ""),
+            "recent_questions": memory.get("history", []), "previous_plan": memory.get("plan", {}),
+            "recent_analyses": memory.get("analyses", []), "known_sources": memory.get("known_sources", [])}
+
+
+def choose_sources(context):
+    paths = {name: {"requires": sorted({left.split(".")[0] for left, _ in join.keys}),
+                    "adds": join.target, "cardinality": join.cardinality} for name, join in JOINS.items()}
+    return ask_model("conversation_scope", {**context, "table_topics": TOPICS, "approved_paths": paths}, Scope)
+
+
+def plan_analysis(context, base, joins):
+    tables = scope_tables(base, joins)
+    known = context["known_sources"]
+    additional = [table for table in tables if table not in known]
+    scoped = schema_context(additional, joins)
+    # Stateless model calls still need column names for previously validated sources.
+    # Only newly needed physical tables require schema inspection on a follow-up.
+    prior = {table: {col: info["type"] for col, info in DEMO_COLUMNS[table].items()}
+             for table in tables if table in known}
+    metrics = {}
+    for report_id, report in DASHBOARDS.items():
+        if report.table != base:
             continue
-        pattern = example.casefold().rstrip("?")
-        for city in CITIES:
-            pattern = pattern.replace(city.lower(), "{city}")
-        for city in CITIES:
-            if words == pattern.format(city=city.lower()):
-                plan = new_plan(metric)
-                plan.cities = [city]
-                return plan
-    return None
+        for key, measure in report.measures.items():
+            metrics[key] = dict(dashboard=report_id, definition=measure.definition, unit=measure.unit,
+                                breakdowns=list(dimensions(report_id)))
+    payload = {**context, "base": base, "joins": joins, "relevant_schema": scoped,
+               "previously_loaded_columns": prior, "defined_metrics": metrics, "city_codes": CITIES}
+    return ask_model("conversation_plan", payload, Decision)
 
 
-def city_followup(question: str, previous: dict, pending: str) -> Decision | None:
-    places = "|".join(CITIES)
-    text = question.strip(" .?!")
-    compare = re.fullmatch(rf"compare (?:it|that|this)(?: with| to) ({places})", text, re.I)
-    replace = re.fullmatch(rf"(?:what about|how about|instead use) ({places})", text, re.I)
-    baseline = re.fullmatch(places, text, re.I)
-    outstanding = re.fullmatch(rf"compare (?:it|that|this)(?: with| to) ({places})[.?!]?", pending, re.I)
-    if not compare and not replace and not (baseline and outstanding):
-        return None
-    if not previous:
-        return Decision(plan=None, clarification="Which measure and starting city should I compare?")
-    plan = Plan.model_validate(previous)
-    if compare:
-        city = compare[1].title()
-        if plan.group_by not in ("total", "city"):
-            return Decision(plan=None, clarification="Should I compare city totals instead of the previous breakdown?")
-        if not plan.cities or plan.cities == [city]:
-            return Decision(plan=None, clarification=f"Which other city should I compare with {city}?")
-        plan.cities = list(dict.fromkeys([*plan.cities, city]))
-        plan.group_by = "city"
-    elif replace:
-        plan.cities = [replace[1].title()]
-    else:
-        cities = [baseline[0].title(), outstanding[1].title()]
-        if cities[0] == cities[1]:
-            return Decision(plan=None, clarification="Which two different cities should I compare?")
-        plan.cities = cities
-        plan.group_by = "city"
-    return Decision(plan=plan, clarification=None)
-
-
-def resolve_plan(question: str, report_id: str, memory: dict) -> Decision:
-    previous = memory.get("plan") or {}
-    pending = memory.get("pending", "")
-    direct = example_plan(question, report_id)
-    if direct:
-        return Decision(plan=direct, clarification=None)
-    if report_id == memory.get("plan_dashboard") or not previous:
-        comparison = city_followup(question, previous, pending)
-        if comparison:
-            return comparison
-    report = DASHBOARDS[report_id]
-    detail = (question + " " + pending).lower()
-    location = any(city.lower() in detail for city in CITIES) or re.search(r"cit(?:y|ies)|office|utili[sz]ation", detail)
-    joins = list(report.joins) if report_id == "weather" or location or previous.get("cities") else []
-    if report_id == "schedule" and not joins and re.search(r"team|role|employee", detail):
-        joins.append("schedule_employee")
-    if report_id == "visits" and (re.search(r"team|role|engineer|analyst|planner|platform|delivery|insights", detail)
-                                  or previous.get("role") or previous.get("team")):
-        joins.append("visit_employee")
-    if report_id == "hiring" and "project" in detail:
-        joins.append("hiring_project")
-    known = memory.get("sources", [])
-    additional = [table for table in source_tables(report, joins) if table not in known]
-    inputs = {
-        "question": question, "original_question": memory.get("original_question", ""),
-        "pending_question": pending, "recent_questions": memory.get("history", []),
-        "previous_plan": previous, "previous_dashboard": memory.get("plan_dashboard"), "dashboard": report.title,
-        "recent_analyses": memory.get("analyses", []),
-        "measures": {key: {"definition": value.definition, "unit": value.unit, "aliases": value.aliases}
-                     for key, value in report.measures.items()},
-        "breakdowns": list(dimensions(report_id)), "known_sources": known,
-        "relevant_schema": schema_context(additional, joins),
-    }
-    with llm_connection() as (client, model):
-        response = create_completion(client, model, load_prompt("conversation_plan"), inputs,
-                                     json_schema=Decision.model_json_schema())
-    decision = parse_output(response, Decision)
-    if decision.clarification or not decision.plan:
-        return Decision(plan=None, clarification=decision.clarification or "Which measure and filters should I use?")
-    return decision
+def accepted_plan(decision, base, joins):
+    if sum(item is not None for item in (decision.plan, decision.fields, decision.clarification)) != 1:
+        raise ValueError("Which measure or fields would you like to explore?")
+    if decision.clarification:
+        raise ValueError(decision.clarification)
+    if decision.fields:
+        return {"base": base, "joins": joins, "fields": decision.fields.model_dump()}
+    for key, report in DASHBOARDS.items():
+        if report.table == base and decision.plan and decision.plan.metric in report.measures:
+            if set(needed_joins(key, decision.plan)) <= set(joins):
+                return {"dashboard": key, "metric_plan": decision.plan.model_dump()}
+    raise ValueError("This measure needs a different source or an additional approved join.")

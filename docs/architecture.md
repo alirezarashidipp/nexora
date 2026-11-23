@@ -2,31 +2,36 @@
 
 ## Purpose
 
-The default workspace discovers dashboards and answers questions across the
-prebuilt demo sources. `POST /ag-ui` validates the current user action, runs a
-checkpointed graph and streams a complete UI state snapshot. The browser stores
-the thread UUID in session storage. Server state supplies the conversation context.
+The desktop workspace sends a thread UUID and a run UUID to `POST /ag-ui`.
+The Python `ag-ui-langgraph` adapter runs the same compiled LangGraph graph that uses
+`InMemorySaver`. The `ag-ui-protocol` event encoder streams the adapter's run, node
+and shared-state events over SSE. The browser shows progress as nodes run.
 
-1. `read_dashboards` searches only `locations.dashboard_catalog` during discovery.
-2. `handle_turn` restores the original question and selected dashboard for Answer Here.
-3. `resolve_plan` resolves the measure, breakdown and filters. Standard demo
-   questions and city comparisons resolve locally. Other wording goes through
-   the existing provider connection with the relevant slice of the semantic catalogue.
-   When discovery has no match, Answer Here also checks measure aliases such as
-   “floor space”. An ambiguous or unknown subject prompts a clarification.
-4. `analyse` builds a parameterised aggregate SELECT using approved joins. Live
-   column definitions and keys are checked on first use and cached by table.
-5. The API sends SQL, parameters, the metric definition, source names and rows in
-   an AG-UI snapshot. The LangGraph checkpoint retains the compact plan and source names.
-   A page reload reconstructs the latest evidence from the immutable fixtures.
+1. **Discover dashboards.** The model receives the question and a compact list of dashboard IDs,
+   titles, descriptions, keywords and KPI labels. The application validates the ranking. An
+   unavailable provider or invalid output uses deterministic keyword ranking. A valid empty
+   ranking is a meaningful outcome.
+2. **Select sources.** Answer Here restores the original wording. The model sees table topics,
+   approved relationship names and business context to choose a base and an ordered join path.
+   A dashboard recommendation can guide the choice. A question with no recommendation can
+   still use available data.
+3. **Plan the query.** Only selected table definitions and join keys enter the planning request.
+   Follow-ups carry the recent analyses, existing filters and outstanding clarification.
+   Previously used sources supply compact column names and types. Newly required source
+   definitions are validated and cached. Both example buttons and typed questions use this path.
+4. **Read evidence.** The application builds a bound SELECT for either a defined business
+   metric or custom columns, aggregates, filters and sorting. A snapshot carries the answer,
+   SQL, bindings and SQLite rows to the browser. Restoring a completed answer reruns its
+   validated plan on the immutable fixtures.
 
-The application uses ordinary LangGraph state channels, the public checkpointer
-API and one lock for in-process turns. A failed turn restores the preceding
-checkpoint. Each thread retains its six most recent questions, six compact analysis
-contexts and twelve run IDs
-for retries. A duplicate run synchronises to the current state.
-See [AG-UI state snapshots](https://docs.ag-ui.com/concepts/state) and
-[LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence).
+Only the selected dashboard is writable client state, on the select action and after
+validation against that thread's recommendations. The graph's request context holds
+model inputs and transient evidence. The checkpoint keeps six recent questions and
+analysis contexts and twelve run IDs for retries. Failure restores the last committed
+checkpoint. The demo serialises turns in one process and retains up to 64 threads.
+
+See the [Python AG-UI LangGraph adapter](https://github.com/ag-ui-protocol/ag-ui/blob/main/integrations/langgraph/python/README.md)
+and [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence).
 
 ## Employee assistant
 

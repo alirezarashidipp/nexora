@@ -23,6 +23,11 @@ key/model or the seven Azure settings listed in `.env.example`, plus the require
 `LLM_TEMPERATURE`. Azure values must come from the target environment.
 See [LLM connection](llm-connection.md). Docker Compose reads `.env` at runtime.
 
+Both AG-UI Python packages are pinned in `requirements.txt`. Run the conversation
+workspace with one worker for in-memory threads. Allow streaming SSE when deploying
+behind a proxy. With the language service unavailable, keyword dashboard discovery
+works and analytical turns return a provider error.
+
 ## Docker Compose
 
 ```powershell

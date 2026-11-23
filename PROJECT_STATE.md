@@ -1,28 +1,36 @@
 # Project State
 
-Last updated: 2026-11-22
+Last updated: 2026-11-23
 
 ## Status
 
-The desktop landing page now supports **Ask Once → Discover → Answer Here →
-Continue**. The catalogue has ten dashboards and five prebuilt fictional databases,
-with eight columns per table and up to 20 rows per table. One bounded LangGraph
-checkpoint per conversation holds the original question or its private reference,
-recent questions, dashboard selection, filters and source names. AG-UI streams
-the current view, SQL and evidence to the browser.
+The desktop workspace supports **Ask Once → Discover → Answer Here → Continue**.
+Dashboard discovery asks the configured language model to rank ten fictional dashboards
+using their titles, descriptions, keywords and KPI labels. The UI identifies keyword
+fallback when the model is unavailable or returns an invalid ranking.
 
-The four suggested question patterns and city comparisons use the real SQLite
-assets offline. A versioned language-planning prompt handles other wording using
-catalogue measures. Unavailable measures and ambiguous requests need clarification.
-Dashboard links are placeholders until configured. The initial release uses one
-server process, with restart and least-recently-used eviction clearing memory.
+Answer Here routes every question through model-based source selection and planning.
+Suggested questions use the same path as typed questions. The planner can choose a
+defined business metric or compose a scoped query over individual fields. A clarification
+can resolve a missing baseline or an unsupported request. SQLite supplies the displayed
+rows, SQL and bound parameters. The five synthetic databases cover London, Manchester,
+Dubai, Mumbai, Bengaluru and Shanghai, with ten tables and at most 20 rows each.
 
-On 2026-11-22, 46 Python tests passed, including reproducible fixture contents,
-exact schema contracts, thread isolation, bounded checkpoints and evidence
-queries. A desktop Chrome walkthrough covered dashboard selection, Answer Here,
-the Bristol/London comparison, reload, a fresh thread and a three-database
-weather query. General language interpretation was exercised with mocked model
-responses. The JavaScript checks, database self-check and Compose configuration passed.
+The AG-UI LangGraph adapter streams node progress and shared UI snapshots from the same
+checkpointed graph that holds conversation memory. One bounded checkpoint per thread
+retains business context. A server restart clears it. Dashboard destinations remain
+placeholders unless configured.
+
+Regression tests use the OpenAI SDK with a simulated HTTP provider. They exercise
+paraphrases, novel field-level questions, comparisons, incremental schema loading, and
+step delivery over an actual HTTP stream while the simulated provider is still waiting.
+This verifies integration and evidence on the fixtures. Live provider relevance and
+planning quality have not been measured on this branch.
+
+On 23 November 2026 the full suite passed 56 Python tests. The database self-check,
+JavaScript checks and Compose validation also passed. A desktop Chrome walkthrough
+used a simulated provider and the real application to verify dashboard selection,
+Answer Here, a two-city comparison, SQL evidence, reload and keyword fallback.
 
 The schema-guided SQL application is runnable locally and through Docker. A
 user can ask about the fixed SQLite table `data`, receive validation or clarification, inspect
@@ -87,15 +95,20 @@ The application and container never create, migrate, or seed it.
 - There is no migration system; schema changes require database recreation or
   an externally managed database.
 - Each `/ask` request is independent. The separate `/ag-ui` route maintains thread memory.
-- No application maximum question length or result-row cap is imposed. All query
-  rows go to the answer model; provider context limits still apply.
+- Neither workspace imposes a result-row cap. The employee workspace sends query
+  rows to the answer model. The conversation workspace formats evidence directly
+  from SQLite and keeps rows outside conversation memory.
 - The frontend targets desktop widths of 1180px and above; it has no mobile
   layout or dark appearance.
 - Charts require 2-20 rows with one unique text-label column and one numeric
   column whose values are non-negative and not all zero. Pie requires 2-8
   strictly positive values.
-- Valid questions make three model calls; incomplete or invalid questions make
-  one.
+- The employee workflow makes three model calls for a valid question. Conversation
+  discovery makes one model call. Answer Here and follow-ups use a source-selection
+  call followed by a scoped planning call when a source can be chosen.
+- Custom conversation plans support column selection, filtering, grouping, common
+  aggregates and ranking. Requests that require unsupported calculations or
+  unavailable data prompt a clarification.
 - Live evals use the selected application provider plus an OpenAI DeepEval judge, can vary between runs, and are
   intentionally excluded from deterministic CI.
 

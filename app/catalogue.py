@@ -10,10 +10,9 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
-from .schema import DEMO_COLUMNS, DEMO_KEYS
+from .schema import CITIES, DEMO_COLUMNS, DEMO_KEYS
 
 DEMO_DIR = Path(__file__).resolve().parent.parent / "demo_data"
-CITIES = {"London": "LON", "Bristol": "BRS", "Manchester": "MAN"}
 TEAMS = ("Platform", "Delivery", "Insights")
 ROLES = ("Engineer", "Analyst", "Planner")
 
@@ -183,18 +182,6 @@ def find_dashboards(question: str, dashboards: list[dict]) -> list[str]:
         return []
     minimum = max(1, -ranked[0][0] / 3)
     return [report_id for score, report_id in ranked[:3] if -score >= minimum]
-
-
-def find_measure_scope(question: str) -> str:
-    """Look up business measures after Answer Here when discovery has no match."""
-    wording = " " + " ".join(re.findall(r"[a-z0-9]+", question.lower())) + " "
-    matches = set()
-    for key, report in DASHBOARDS.items():
-        for name, measure in report.measures.items():
-            terms = (name.replace("_", " "), measure.label, *measure.aliases)
-            if any(" " + term.lower() + " " in wording for term in terms):
-                matches.add(key)
-    return matches.pop() if len(matches) == 1 else ""
 
 
 @lru_cache(maxsize=40)

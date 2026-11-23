@@ -6,7 +6,7 @@ let threadId = sessionStorage.getItem(threadKey) || crypto.randomUUID();
 sessionStorage.setItem(threadKey, threadId);
 let state = {stage: "new"};
 let originalDraft = "";
-let followupDraft = "";
+let pendingDraft = "";
 let busy = false;
 let retry = null;
 
@@ -25,7 +25,7 @@ function renderMatches(items) {
     input.type = "radio";
     input.name = "dashboard";
     input.checked = item.dashboard_id === state.selected;
-    const select = () => sendTurn("select", state.choosing_followup ? followupDraft : "", item.dashboard_id);
+    const select = () => sendTurn("select", "", item.dashboard_id);
     input.addEventListener("change", select);
     label.append(input, element("strong", item.title), element("small", item.description));
     if (item.url_status === "configured") {
@@ -44,7 +44,10 @@ function renderMatches(items) {
 function renderEvidence(evidence) {
   byId("insight-answer").textContent = evidence.answer;
   const filters = state.filters;
-  const applied = [...filters.cities, filters.team, filters.role];
+  const applied = [...(filters.cities || []), filters.team, filters.role];
+  for (const rule of filters.filters || []) {
+    applied.push(rule.column.split(".")[1] + " " + rule.operator + " " + rule.values.join(", "));
+  }
   if (filters.start_date) applied.push("From " + filters.start_date);
   if (filters.end_date) applied.push("Through " + filters.end_date);
   byId("scope").textContent = applied.filter(Boolean).join(" · ");
@@ -74,9 +77,11 @@ function renderState(snapshot) {
   const original = state.original_question || originalDraft;
   byId("original").textContent = original;
   byId("original").hidden = fresh || !original;
-  byId("discovery").hidden = fresh || state.stage === "answer" || (Boolean(state.filters?.metric) && !state.choosing_followup);
-  byId("answer-here").hidden = Boolean(state.choosing_followup);
-  if (!byId("discovery").hidden) renderMatches(state.dashboards);
+  byId("discovery").hidden = state.stage !== "discover";
+  if (!byId("discovery").hidden) {
+    byId("match-method").textContent = state.discovery_mode === "semantic" ? "Semantic match" : "Keyword fallback";
+    renderMatches(state.dashboards);
+  }
   byId("insight").hidden = !state.evidence;
   if (state.evidence) renderEvidence(state.evidence);
   byId("notice").hidden = !state.notice;
@@ -103,6 +108,11 @@ async function readEvents(response) {
       buffer = buffer.slice(boundary + 2);
       if (frame.startsWith("data:")) {
         const event = JSON.parse(frame.slice(5));
+        if (event.type === "STEP_STARTED") {
+          const labels = {discover_dashboards: "Finding dashboards…", select_sources: "Selecting data sources…",
+            plan_query: "Planning the analysis…", query_sources: "Reading evidence…"};
+          if (labels[event.stepName]) byId("run-status").textContent = labels[event.stepName];
+        }
         if (event.type === "STATE_SNAPSHOT") renderState(event.snapshot);
         if (event.type === "RUN_ERROR") throw new Error(event.message);
         if (event.type === "RUN_FINISHED") finished = true;
@@ -118,24 +128,30 @@ async function sendTurn(action, text = "", dashboard = "") {
   busy = true;
   const signature = JSON.stringify([threadId, action, text, dashboard]);
   const runId = retry?.signature === signature ? retry.runId : crypto.randomUUID();
+  const previousState = state;
   retry = {signature, runId};
   byId("run-status").textContent = action === "restore" ? "" : "Working…";
   const controls = document.querySelectorAll(".conversation button, .conversation input, #message");
   controls.forEach(control => { control.disabled = true; });
   try {
     const payload = {
-      threadId, runId, state: {}, tools: [], context: [],
+      threadId, runId, state: action === "select" ? {selected: dashboard} : {}, tools: [], context: [],
       messages: text ? [{id: crypto.randomUUID(), role: "user", content: text}] : [],
-      forwardedProps: {action, dashboard},
+      forwardedProps: action === "followup" && state.needs_prior_question
+        ? {action, prior_question: pendingDraft} : {action},
     };
     const response = await fetch("/ag-ui", {method: "POST",
       headers: {"Content-Type": "application/json", Accept: "text/event-stream"}, body: JSON.stringify(payload)});
     if (!response.ok) throw new Error("The server could not accept this turn.");
     await readEvents(response);
+    if (action === "followup" || action === "answer_here") {
+      pendingDraft = state.needs_prior_question ? text : "";
+    }
     retry = null;
     if (action !== "restore" && action !== "select") byId("message").value = "";
     byId("run-status").textContent = "";
   } catch (error) {
+    renderState(previousState);
     byId("run-status").textContent = error.message;
   } finally {
     busy = false;
@@ -151,7 +167,6 @@ byId("conversation-form").addEventListener("submit", event => {
     originalDraft = text;
     sendTurn("discover", text);
   } else {
-    followupDraft = text;
     sendTurn("followup", text);
   }
 });
@@ -168,7 +183,7 @@ byId("new-thread").addEventListener("click", () => {
   threadId = crypto.randomUUID();
   sessionStorage.setItem(threadKey, threadId);
   originalDraft = "";
-  followupDraft = "";
+  pendingDraft = "";
   retry = null;
   byId("message").value = "";
   byId("run-status").textContent = "";

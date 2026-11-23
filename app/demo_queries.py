@@ -13,14 +13,14 @@ from .catalogue import (
     CITIES, DASHBOARDS, DEMO_DIR, JOINS, Dashboard, Measure,
     database_uri, dashboard_sources, source_tables, table_definition,
 )
-from .schema import DEMO_COLUMNS
+from .schema import DEMO_COLUMNS, OFFICES
 
 
 class Plan(BaseModel):
     model_config = ConfigDict(extra="forbid")
     metric: str
     group_by: Literal["total", "city", "date", "team", "role", "project"]
-    cities: list[Literal["London", "Bristol", "Manchester"]]
+    cities: list[str]
     team: Literal["Platform", "Delivery", "Insights"] | None
     role: Literal["Engineer", "Analyst", "Planner"] | None
     start_date: str | None
@@ -90,7 +90,7 @@ def read_evidence(sql: str, parameters: list, tables: list[str], directory: Path
                 return sqlite3.SQLITE_OK
         if action == sqlite3.SQLITE_SELECT:
             return sqlite3.SQLITE_OK
-        if action == sqlite3.SQLITE_FUNCTION and column in ("count", "sum", "round", "nullif", "max"):
+        if action == sqlite3.SQLITE_FUNCTION and column in ("count", "sum", "round", "nullif", "max", "min", "avg"):
             return sqlite3.SQLITE_OK
         return sqlite3.SQLITE_DENY
 
@@ -103,6 +103,8 @@ def read_evidence(sql: str, parameters: list, tables: list[str], directory: Path
 
 
 def query_filters(report: Dashboard, plan: Plan, fields: dict) -> tuple[list, list]:
+    if any(city not in CITIES for city in plan.cities):
+        raise ValueError("Which of the six demo offices should I use?")
     if len(plan.cities) != len(set(plan.cities)):
         raise ValueError("Choose distinct cities to compare.")
     predicates = [report.condition] if report.condition else []
@@ -209,6 +211,19 @@ def check_demo_data(directory: Path = DEMO_DIR) -> None:
                 found = db.execute(f"SELECT COUNT(*), COUNT({key}) FROM {source}").fetchone()
                 if tuple(found) != (count, count):
                     raise ValueError(f"Missing or non-unique relationship: {name}")
+        offices = {r[0]: tuple(r[1:]) for r in db.execute(
+            "SELECT office_name, office_id, country_code, timezone FROM locations.offices")}
+        if offices != {city: details[:3] for city, details in OFFICES.items()}:
+            raise ValueError("The office directory must contain the six agreed locations.")
+        for table, field in (
+            ("workforce.employees", "home_office_id"), ("workforce.badge_visits", "visited_office_id"),
+            ("portfolio.portfolio_projects", "lead_office_id"), ("portfolio.hiring_requests", "office_id"),
+            ("facilities.office_daily_metrics", "office_id"), ("external.weather_daily", "city_code"),
+            ("external.holiday_calendar", "office_id"),
+        ):
+            sites = {r[0] for r in db.execute(f"SELECT DISTINCT {field} FROM {table}")}
+            if sites != set(CITIES.values()):
+                raise ValueError(f"Expected all six offices in {table}.")
         mappings = {r[0]: json.loads(r[1]) for r in db.execute("SELECT dashboard_id, source_tables_json FROM locations.dashboard_catalog")}
         if mappings != {key: dashboard_sources(key) for key in DASHBOARDS}:
             raise ValueError("Dashboard source mappings do not match the approved catalogue.")
