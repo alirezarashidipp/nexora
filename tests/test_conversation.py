@@ -163,8 +163,14 @@ class FixturesTest(unittest.TestCase):
                 result = {r["dashboard_id"]: r for r in read_dashboards()}
                 self.assertEqual(result["workforce"]["url_status"], "configured")
                 self.assertEqual(result["workforce"]["dashboard_url"], "https://reports.internal/custom")
-                self.assertEqual(result["estate"]["url_status"], "placeholder")
-                self.assertIsNone(result["estate"]["dashboard_url"])
+                for key, card in result.items():
+                    if key != "workforce":
+                        self.assertEqual(card["url_status"], "sample")
+                        self.assertEqual(card["dashboard_url"], f"https://example.org/#{key}")
+                config.write_text(json.dumps({"estate": ""}))
+                disabled = next(card for card in read_dashboards() if card["dashboard_id"] == "estate")
+                self.assertEqual(disabled["url_status"], "placeholder")
+                self.assertIsNone(disabled["dashboard_url"])
                 config.write_text(json.dumps({"workforce": "https://reports.example.org/workforce"}))
                 placeholder = next(card for card in read_dashboards() if card["dashboard_id"] == "workforce")
                 self.assertIsNone(placeholder["dashboard_url"])
@@ -233,9 +239,10 @@ class ConversationTest(unittest.TestCase):
     def scope(self, table, *joins, offices=()):
         self.replies.append(dict(base=table, joins=list(joins), office_filters=list(offices), clarification=None))
 
-    def metric(self, key, cities, group="total", start=None):
+    def metric(self, key, cities, group="total", start=None, end=None):
         plan = new_plan(key)
         plan.cities, plan.group_by, plan.start_date = cities, group, start
+        plan.end_date = end
         self.replies.append(dict(plan=plan.model_dump(), fields=None, clarification=None))
 
     def fields(self, outputs, filters=(), sort=(), limit=None):
@@ -459,15 +466,21 @@ class ConversationTest(unittest.TestCase):
         self.assertEqual(self.turn("discover", question, thread=str(uuid4()))["discovery_mode"], "keyword_fallback")
 
     def test_every_suggested_question_uses_the_real_planner(self):
-        cases = (("workforce", "employees", "Dubai"), ("cost", "energy_cost", "Manchester"),
-                 ("weather", "rain_attendance", "Mumbai"), ("portfolio", "staffing_gap", "Shanghai"))
+        cases = (
+            ("estate", "seats", ["London"], "total", None),
+            ("workforce", "employees", ["Dubai"], "total", None),
+            ("cost", "energy_cost", ["London", "Manchester"], "city", None),
+            ("occupancy", "utilisation", [], "city", "2026-11-17"),
+            ("weather", "rain_attendance", ["London", "Mumbai"], "city", None),
+        )
         examples = self.client.get("/conversation/examples").json()
         self.assertEqual(len(examples), len(cases))
-        for question, (report, metric, city) in zip(examples, cases):
+        self.assertEqual(len(set(examples)), 5)
+        for question, (report, metric, cities, group, day) in zip(examples, cases):
             thread = str(uuid4())
             self.replies.append({"clarification": None, "matches": [] if report == "weather" else [model_match(report)]})
-            self.scope(METRIC_GROUPS[report].table, *METRIC_GROUPS[report].joins)
-            self.metric(metric, [city])
+            self.scope(METRIC_GROUPS[report].table, *METRIC_GROUPS[report].joins, offices=cities)
+            self.metric(metric, cities, group, start=day, end=day)
             self.turn("discover", question, thread=thread)
             view = self.turn("answer_here", question, thread=thread)
             self.assertTrue(view["evidence"]["rows"])

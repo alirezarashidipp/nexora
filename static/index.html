@@ -6,23 +6,13 @@
   <meta name="theme-color" content="#f3f5f7">
   <title>Employee workspace | Nexora</title>
   <link rel="icon" type="image/svg+xml" href="/static/image/HSBC_logo_(2018)%20(1).svg">
-  <link rel="stylesheet" href="/static/style.css?v=15">
+  <link rel="stylesheet" href="/static/style.css?v=16">
   <script src="/static/chart.js" defer></script>
   <link rel="stylesheet" href="/static/conversation.css">
   <script defer src="/static/conversation.js"></script>
-  <script defer src="/static/app.js?v=8"></script>
+  <script defer src="/static/app.js?v=9"></script>
 </head>
 <body>
-  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-    <defs>
-      <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></symbol>
-      <symbol id="i-field" viewBox="0 0 24 24"><path d="M5 3h14v14H9l-4 4V3Z"/><path d="M8 7h8M8 11h6"/></symbol>
-      <symbol id="i-number" viewBox="0 0 24 24"><path d="m10 3-4 18M18 3l-4 18M4 9h17M2 15h17"/></symbol>
-      <symbol id="i-grid" viewBox="0 0 24 24"><path d="M4 4h6v6H4zm10 0h6v6h-6zM4 14h6v6H4zm10 0h6v6h-6z"/></symbol>
-      <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 5h12M9 12h12M9 19h12M3 5h1M3 12h1M3 19h1"/></symbol>
-      <symbol id="i-database" viewBox="0 0 24 24"><ellipse cx="12" cy="5" rx="8" ry="3"/><path d="M4 5v14c0 4 16 4 16 0V5M4 12c0 4 16 4 16 0"/></symbol>
-    </defs>
-  </svg>
   <div class="app-frame" id="top">
     <header class="topbar">
       <a class="brand" href="#top" aria-label="Nexora home">
@@ -32,14 +22,7 @@
       </a>
       <nav class="top-nav" aria-label="Sections">
         <a href="#workspace" aria-current="page">Employee workspace</a>
-        <a href="#data-sources">Data sources</a>
       </nav>
-      <label class="search-box global-search">
-        <svg class="icon" aria-hidden="true"><use href="#i-search"/></svg>
-        <span class="sr-only">Search workspace</span>
-        <input id="workspace-search" type="search" placeholder="Search…" autocomplete="off">
-        <kbd aria-hidden="true">/</kbd>
-      </label>
     </header>
     <main class="page-content">
       <div class="hero-grid">
@@ -85,27 +68,13 @@
           <section id="recent" hidden><h2>This conversation</h2><ol id="history"></ol></section>
         </section>
       </div>
-      <section class="data-panel panel" id="data-sources" aria-labelledby="data-title">
-        <header class="panel-heading"><div><h2 id="data-title">Employee directory</h2><p>Fields in the employee directory.</p></div><svg class="icon panel-heading-icon" aria-hidden="true"><use href="#i-database"/></svg></header>
-        <button id="browse-fields" type="button">Browse fields</button>
-        <label class="search-box field-search"><svg class="icon" aria-hidden="true"><use href="#i-search"/></svg><span class="sr-only">Search data fields</span><input id="field-search" type="search" placeholder="Search fields, types or keywords…" autocomplete="off"></label>
-        <div class="data-toolbar">
-          <span class="dataset-name"><svg class="icon" aria-hidden="true"><use href="#i-database"/></svg><span id="dataset-name">Employee directory</span><span class="dataset-dot">·</span><span id="field-count" aria-live="polite"></span></span>
-          <div class="view-options" role="group" aria-label="Field layout"><button type="button" data-view="grid" aria-label="Grid view" aria-pressed="true"><svg class="icon" aria-hidden="true"><use href="#i-grid"/></svg></button><button type="button" data-view="list" aria-label="List view" aria-pressed="false"><svg class="icon" aria-hidden="true"><use href="#i-list"/></svg></button></div>
-        </div>
-        <div id="schema-fields" class="fields"></div>
-        <template id="directory-field">
-          <article class="field">
-            <details>
-              <summary>
-                <span class="field-icon"><svg class="icon" aria-hidden="true"><use href="#i-field"/></svg></span>
-                <span class="field-copy"><strong></strong><small></small></span>
-              </summary>
-              <div class="field-description"><p></p><small></small></div>
-            </details>
-          </article>
-        </template>
-        <p id="fields-empty" class="empty-state" hidden>No fields match your search. Try another name or keyword.</p>
+      <section id="sample-questions" class="sample-section" aria-labelledby="sample-heading" hidden>
+        <header class="sample-heading">
+          <h2 id="sample-heading">Sample questions</h2>
+          <span>Easy to advanced</span>
+        </header>
+        <ol id="sample-list" class="sample-list"></ol>
+        <p id="sample-error" hidden>Sample questions could not be loaded. <button id="retry-samples" type="button">Retry</button></p>
       </section>
     </main>
   </div>

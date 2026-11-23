@@ -21,7 +21,7 @@
   source_tables:
   - workforce.employees
   - locations.offices
-  dashboard_url: null
+  dashboard_url: https://example.org/#workforce
 - dashboard_id: estate
   title: Office estate
   description: Available desks and contracted monthly rent by office.
@@ -42,7 +42,7 @@
   - office
   source_tables:
   - locations.offices
-  dashboard_url: null
+  dashboard_url: https://example.org/#estate
 - dashboard_id: portfolio
   title: Portfolio staffing
   description: Delivery capacity and unfilled demand on projects.
@@ -66,7 +66,7 @@
   source_tables:
   - portfolio.portfolio_projects
   - locations.offices
-  dashboard_url: null
+  dashboard_url: https://example.org/#portfolio
 - dashboard_id: hiring
   title: Hiring pipeline
   description: Open requisition capacity by hiring office and project.
@@ -89,7 +89,7 @@
   - portfolio.hiring_requests
   - locations.offices
   - portfolio.portfolio_projects
-  dashboard_url: null
+  dashboard_url: https://example.org/#hiring
 - dashboard_id: occupancy
   title: Office occupancy
   description: Daily attendance and peak utilisation relative to seats.
@@ -112,7 +112,7 @@
   source_tables:
   - facilities.office_daily_metrics
   - locations.offices
-  dashboard_url: null
+  dashboard_url: https://example.org/#occupancy
 - dashboard_id: cost
   title: Workplace costs
   description: Metered energy and operating costs per recorded office-day.
@@ -136,4 +136,4 @@
   source_tables:
   - facilities.office_daily_metrics
   - locations.offices
-  dashboard_url: null
+  dashboard_url: https://example.org/#cost

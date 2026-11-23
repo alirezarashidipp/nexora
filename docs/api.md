@@ -37,8 +37,9 @@ The adapter emits `RUN_STARTED`, `STEP_STARTED` and `STEP_FINISHED` for executed
 graph nodes, shared `STATE_SNAPSHOT` events, a `MESSAGES_SNAPSHOT` and `RUN_FINISHED`.
 A discovery snapshot includes `discovery_mode` and up to three ranked dashboard cards.
 Each card carries `dashboard_id`, `title`, `description`, `coverage` (`exact` or `related`),
-`reason`, `url_status` and a nullable `dashboard_url`. Only configured HTTPS destinations
-are actionable. If the model needs more detail, `discovery_clarification` holds a short
+`reason`, `url_status` and a nullable `dashboard_url`. A `sample` link opens the
+example destination and a `configured` link opens the actual dashboard. If the model
+needs more detail, `discovery_clarification` holds a short
 question. The browser submits the reply as `forwardedProps.clarification` on Answer Here
 and the planner receives both the original question and the user's detail.
 
@@ -63,7 +64,8 @@ history cannot replace server state.
 A missing source file produces a `RUN_ERROR` with code `dataset` and the affected
 dataset name. A failed run preserves the previous committed turn. The client
 can retry with the same run ID. A malformed request receives HTTP 422. The examples from
-`GET /conversation/examples` are starter text and follow the usual model and query path.
+`GET /conversation/examples` are five English questions in increasing order of difficulty.
+Clicking one starts the same discovery and Answer Here flow as typing it.
 
 ## `GET /schema`
 

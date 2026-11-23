@@ -264,23 +264,15 @@ class ContractTests(unittest.TestCase):
                 self.assertEqual(payload["sql"], sql)
                 self.assertEqual(payload["rows"], rows)
 
-    def test_frontend_consumes_schema_instead_of_hardcoding_columns(self):
+    def test_workspace_offers_sample_questions_and_removes_the_directory(self):
         script = (STATIC_DIR / "app.js").read_text(encoding="utf-8")
         html = (STATIC_DIR / "index.html").read_text(encoding="utf-8")
 
-        for token in (
-            'fetch("/schema")',
-            "data.columns.forEach",
-            "column.name",
-            "column.description",
-            "column.possible_values",
-            "showFields",
-        ):
-            self.assertIn(token, script)
-        self.assertRegex(
-            html,
-            r'(?s)<div\s+id=["\']schema-fields["\'][^>]*>\s*</div>',
-        )
+        self.assertIn("/conversation/examples", script)
+        self.assertIn('id="sample-questions"', html)
+        self.assertNotIn("Employee directory", html)
+        self.assertNotIn('href="#data-sources"', html)
+        self.assertNotIn('fetch("/schema")', script)
 
 
 class WorkflowTests(unittest.TestCase):

@@ -35,8 +35,8 @@ function renderMatches(items) {
     coverage.className = "coverage " + item.coverage;
     label.append(input, element("strong", item.title), coverage);
     card.append(label, element("p", item.reason));
-    if (item.url_status === "configured") {
-      const link = element("a", "Open dashboard ↗");
+    if (item.url_status === "sample" || item.url_status === "configured") {
+      const link = element("a", item.url_status === "sample" ? "Open sample link ↗" : "Open dashboard ↗");
       link.href = item.dashboard_url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
@@ -98,6 +98,7 @@ function renderEvidence(evidence) {
 function renderState(snapshot) {
   state = snapshot;
   const fresh = state.stage === "new";
+  byId("sample-questions").hidden = !fresh;
   const original = state.original_question || originalDraft;
   byId("original").textContent = original;
   byId("original").hidden = fresh || !original;
@@ -158,6 +159,7 @@ async function readEvents(response) {
 async function sendTurn(action, text = "", dashboard = "", clarification = "") {
   if (busy) return;
   busy = true;
+  byId("sample-questions").inert = true;
   const signature = JSON.stringify([threadId, action, text, dashboard, clarification]);
   const runId = retry?.signature === signature ? retry.runId : crypto.randomUUID();
   const previousState = state;
@@ -199,6 +201,7 @@ async function sendTurn(action, text = "", dashboard = "", clarification = "") {
     byId("run-status").textContent = error.message;
   } finally {
     busy = false;
+    byId("sample-questions").inert = false;
     controls.forEach(control => { control.disabled = false; });
   }
 }

@@ -131,9 +131,11 @@ def read_dashboards() -> list[dict]:
             item["url_status"] = "unavailable"
         else:
             destination = urls.get(key, destination)
-            if configured_url(destination):
+            if key not in urls and destination == f"https://example.org/#{key}":
+                item.update(dashboard_url=destination, url_status="sample")
+            elif configured_url(destination):
                 item.update(dashboard_url=destination, url_status="configured")
-            elif destination:
+            elif destination is not None and destination != "":
                 item["url_status"] = "unavailable"
         dashboards.append(item)
     return dashboards

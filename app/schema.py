@@ -121,10 +121,11 @@ DEMO_KEYS = {
 }
 
 DEMO_EXAMPLES = (
+    "How many desks does the London office have?",
     "How many active employees are in Dubai?",
-    "What was the energy cost in Manchester?",
-    "What was rainy-day attendance in Mumbai?",
-    "What is the project staffing gap in Shanghai?",
+    "How much did London and Manchester each spend on electricity?",
+    "What percentage of seats was occupied at peak in each office on 2026-11-17?",
+    "On rainy days, how did total onsite attendance in London compare with Mumbai?",
 )
 
 

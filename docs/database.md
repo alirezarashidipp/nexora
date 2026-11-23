@@ -33,9 +33,8 @@ before replacing fixture files. `python main.py --check` validates the shipped s
 The 20-row ceiling applies to fixture provisioning. Queries return every matching group.
 
 Discovery reads the published dashboard descriptions from `app/dashboards.yml`. Edit the list to change the number of published dashboards. The offline fixture builder also reads this file for its dashboard descriptions. Each qualified source identifies both the database and the table. The shipped fixture contains six metadata rows and empty destinations.
-The workspace displays a link only when its destination has been configured. An absent or
-unusable destination leaves the recommendation and Answer Here available.
-Set `dashboard_url` in a YAML entry to its verified HTTPS destination. Deployments may override individual destinations through the existing `NEXORA_DASHBOARD_URLS_FILE` JSON mapping. An empty override disables a link. Reserved example domains are rejected. Link validation checks the URL format, not authentication or reachability.
+The six shipped YAML entries use `https://example.org/#<dashboard_id>`. **Open sample link** opens the Example Domain page in a new tab. The fragment contains only the public dashboard ID.
+Set `dashboard_url` in a YAML entry to its actual HTTPS destination to enable **Open dashboard**. Deployments may override individual destinations with the `NEXORA_DASHBOARD_URLS_FILE` JSON mapping. An empty override disables a link. Invalid overrides leave the recommendation and **Answer Here** available. Reserved example domains are rejected as real destinations. Link validation checks the URL format.
 
 The published IDs are `workforce`, `estate`, `portfolio`, `hiring`, `occupancy` and `cost`.
 The independent analytical catalogue still supports schedules, badge visits, weather and closures through Answer Here.

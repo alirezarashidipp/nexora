@@ -1,6 +1,6 @@
 # Nexora
 
-Open the [Employee workspace](http://127.0.0.1:8000/employees). Ask a question,
+Open the [Employee workspace](http://127.0.0.1:8000/employees). Type a question or click one of five samples ordered from easy to advanced,
 review the matching dashboards, or choose **Answer Here** to investigate in place.
 Expand **SQL and evidence** to inspect the sources, parameters and returned rows.
 
@@ -16,7 +16,7 @@ A question about an uncovered office such as Delhi can still receive related das
 Each new conversation gets its own thread. One server process holds up to 64 conversations
 in RAM. Restarting it clears their memory.
 
-The catalogue publishes six dashboard definitions. Each entry records its business purpose, supported questions, KPIs, dimensions, qualified source tables and optional HTTPS destination. All six links start unconfigured. Five prebuilt SQLite databases provide the analytical evidence.
+The catalogue publishes six dashboard definitions. Each entry records its business purpose, supported questions, KPIs, dimensions, qualified source tables and optional HTTPS destination. Each shipped entry opens a labelled sample link on `example.org` until a real destination is configured. Five prebuilt SQLite databases provide the analytical evidence.
 For the exact schema, link configuration and reproducible build see
 [the database guide](docs/database.md). For the streaming contract see
 [the conversation API](docs/api.md#post-ag-ui).
@@ -124,9 +124,7 @@ question
 ```
 
 Prompts live in `prompts/*.yml`; the fixed table name and dataset-specific
-column descriptions live in `app/schema.py`. The frontend discovers that
-table's live schema through
-`GET /schema`, so it does not hardcode employee columns.
+column descriptions live in `app/schema.py`. API clients can inspect the fixed table through `GET /schema`.
 
 ## Safety boundary
 

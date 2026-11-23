@@ -31,7 +31,7 @@ switch to London, omitted and substituted location filters, and YAML schema reje
 
 The AG-UI LangGraph adapter streams node progress and shared UI snapshots from the same
 checkpointed graph that holds conversation memory. One bounded checkpoint per thread
-retains business context. A server restart clears it. All six dashboard destinations start unconfigured.
+retains business context. A server restart clears it. Each shipped dashboard card offers a labelled sample link; configured destinations open the corresponding dashboard.
 
 Regression tests use the OpenAI SDK with a simulated HTTP provider. They exercise
 paraphrases, novel field-level questions, comparisons, incremental schema loading, and
@@ -78,7 +78,7 @@ the generated SQL, and get an answer grounded in the database result.
 - Employee workspace serves discovery, Answer Here, chart, SQL evidence and thread history
   at `/`, `/employees` and the redirect from `/conversation`.
 - The published dashboard catalogue lives in `app/dashboards.yml`. The page opens
-  with an empty question field. The employee directory field browser loads on request.
+  with a free-text question field and five clickable examples, from a single-office lookup to a comparison of attendance on rainy days.
 - Standard-library tests cover API/schema contracts, workflow routing,
   database guardrails, result comparison, answer inputs, and chart eligibility.
 - An opt-in DeepEval suite measures live question classification, generated SQL

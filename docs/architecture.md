@@ -89,8 +89,8 @@ then `generate_answer`.
 - Prompt behavior: `prompts/*.yml`
 - Workflow behavior: `app/workflow.py`
 
-The API exposes schema metadata to the frontend, which makes the UI independent
-of the current table's column names.
+The stateless employee API exposes its fixed table's metadata through `GET /schema`.
+Employee Workspace loads its five starter questions through `GET /conversation/examples`.
 
 Chart eligibility is deterministic browser logic. It uses returned rows only,
 does not add a model call, and leaves the `/ask` response contract unchanged.
