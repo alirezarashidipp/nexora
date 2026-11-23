@@ -7,9 +7,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from .catalogue import CITIES, DEMO_DIR, JOINS
+from .catalogue import DEMO_DIR, scope_tables
 from .demo_queries import join_clause, read_evidence
-from .schema import DEMO_COLUMNS
+from .schema import CITIES, DEMO_COLUMNS
 
 
 class Record(BaseModel):
@@ -38,20 +38,6 @@ class FieldPlan(Record):
     distinct: bool
     sort: list[Sort]
     limit: int | None
-
-
-def scope_tables(base: str, joins: list[str]) -> list[str]:
-    if base not in DEMO_COLUMNS or base == "locations.dashboard_catalog":
-        raise ValueError("Choose an available analytical source.")
-    tables = [base]
-    names = {base.split(".")[1]}
-    for name in joins:
-        join = JOINS.get(name)
-        if not join or join.target in tables or any(left.split(".")[0] not in names for left, _ in join.keys):
-            raise ValueError("These sources have no approved join at this grain.")
-        tables.append(join.target)
-        names.add(join.target.split(".")[1])
-    return tables
 
 
 def filter_value(column: str, info: dict, value):

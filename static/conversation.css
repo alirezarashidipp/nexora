@@ -37,12 +37,10 @@
 #notice { padding: 12px; margin-bottom: 16px; background: var(--color-surface-muted); }
 #run-status:not(:empty) { margin-top: 12px; color: var(--color-ink-soft); }
 
-#workspace.conversation { padding: 26px; }
 #workspace .conversation-heading h2 { margin: 0; }
 #recent { border-top: 1px solid var(--color-rule); margin-top: 22px; padding-top: 18px; }
 #search-again { margin-left: 6px; }
 #discovery h2, #insight h2 { margin-top: 6px; }
-.data-grid { grid-template-columns: 1fr; }
 
 .data-disclosure { margin-top: 18px; color: var(--color-ink-soft); }
 #evidence { overflow-x: auto; }

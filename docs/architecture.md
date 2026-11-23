@@ -9,7 +9,7 @@ and shared-state events over SSE. The browser shows progress as nodes run.
 
 1. **Discover dashboards.** The model sees the six published entries with their IDs, titles,
    business purposes, supported questions, KPI labels, dimensions, keywords and qualified source names. It also receives office coverage and bounded thread context. Destination URLs, column definitions and SQL rows stay out of discovery.
-   The catalogue is read from `app/dashboards.yml`. Discovery never opens SQLite. The model ranks by
+   The catalogue is read from `app/dashboards.yml`. Entries accept only the published metadata fields. A schema block is a configuration error. Discovery never opens SQLite. The model ranks by
    intent and identifies a supporting KPI, exact or partial coverage and the reason.
    Nexora keeps the first three distinct entries that pass validation, in model order.
    An unavailable language service enables keyword fallback. A malformed ranking, refusal
@@ -19,11 +19,13 @@ and shared-state events over SSE. The browser shows progress as nodes run.
 2. **Select sources.** Answer Here restores the original wording. The model sees table topics,
    approved relationship names and business context to choose a base and an ordered join path.
    An explicitly selected dashboard can guide the choice. An unselected recommendation supplies no default source. A question with no recommendation can
-   still use available data.
+   still use available data. If discovery identifies an uncovered office in a validated recommendation,
+   Answer Here asks for a covered office before source selection. Otherwise, the scope model
+   identifies the required office filters for this turn. An uncovered office stops schema loading.
 3. **Plan the query.** Only selected table definitions and join keys enter the planning request.
    Follow-ups carry the recent analyses, existing filters and outstanding clarification.
    Previously used sources supply compact column names and types. Newly required source
-   definitions are validated and cached. Both example buttons and typed questions use this path.
+   definitions are validated and cached. Before SQL execution the server checks that the plan retains the positive office filters identified for the turn.
 4. **Read evidence.** The application builds a bound SELECT for either a defined business
    metric or custom columns, aggregates, filters and sorting. A snapshot carries the answer,
    SQL, bindings and SQLite rows to the browser. Restoring a completed answer reruns its
@@ -33,13 +35,15 @@ and shared-state events over SSE. The browser shows progress as nodes run.
 Only the selected dashboard is writable client state, on the select action and after
 validation against that thread's recommendations. The graph's request context holds
 model inputs and transient evidence. The checkpoint keeps six recent questions and
-analysis contexts and twelve run IDs for retries. Failure restores the last committed
+analysis contexts and up to twelve run IDs and their actions for retries. The latest analysis
+supplies the current plan. Each recommendation stores its rank by insertion order alongside
+its coverage and reason in a single ordered mapping. Failure restores the last committed
 checkpoint. The demo serialises turns in one process and retains up to 64 threads.
 
 See the [Python AG-UI LangGraph adapter](https://github.com/ag-ui-protocol/ag-ui/blob/main/integrations/langgraph/python/README.md)
 and [LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence).
 
-## Employee assistant
+## Stateless employee API
 
 The application answers natural-language questions against the fixed SQLite
 table `data` while keeping schema knowledge, prompts, orchestration, database
@@ -62,7 +66,7 @@ access, and presentation separate.
 
 ```mermaid
 flowchart LR
-    UI["Browser UI"] --> API["POST /ask"]
+    Client["API client"] --> API["POST /ask"]
     API --> Schema["Load SQLite schema + COLUMN_GUIDE"]
     Schema --> Review["Review and normalize question"]
     Review -->|"incomplete / invalid"| Reply["Return explanation"]
@@ -70,9 +74,7 @@ flowchart LR
     SQL --> Guard["Validate SQL"]
     Guard --> DB["Query-only SQLite + authorizer"]
     DB --> Answer["Generate grounded answer"]
-    Answer --> UI
-    UI --> Shape["Inspect returned row shape"]
-    Shape -->|"compatible two-column result"| Chart["Render Bar; offer Pie when valid"]
+    Answer --> Client
 ```
 
 The workflow state is a `TypedDict` with three nodes. `review_question` loads

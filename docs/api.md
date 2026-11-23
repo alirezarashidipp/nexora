@@ -14,7 +14,7 @@ each new conversation and a fresh run UUID for each action. Retry a failed
 delivery with the same run ID. The server uses the last plain-text user message
 and its own checkpoint. Arbitrary client state never becomes conversation memory.
 Retries of successful discovery and selection actions replay the recommendations
-without reopening analytical sources.
+without reopening analytical sources. If a newer search or selection supersedes the requested view, the retry returns an explicit error; use `restore` to retrieve the current state.
 
 ```json
 {

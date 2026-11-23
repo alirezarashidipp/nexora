@@ -105,7 +105,7 @@ function renderState(snapshot) {
   byId("discovery").hidden = state.stage !== "discover" || needsDetail;
   byId("conversation-form").hidden = state.stage === "discover" && !needsDetail;
   if (!byId("discovery").hidden) {
-    const methods = {semantic: "Semantic match", keyword_fallback: "Keyword fallback · language service unavailable",
+    const methods = {semantic: state.dashboards.length ? "These dashboards may help answer your question." : "", keyword_fallback: "Keyword fallback · language service unavailable",
       invalid_ranking: "Dashboard ranking unavailable"};
     byId("match-method").textContent = methods[state.discovery_mode] || "";
     renderMatches(state.dashboards);
@@ -119,7 +119,7 @@ function renderState(snapshot) {
   byId("history").replaceChildren(...(state.history || []).map(q => element("li", q)));
   byId("composer-label").textContent = needsDetail ? state.discovery_clarification : (fresh ? "Your question" : "Continue the conversation");
   byId("message").placeholder = fresh ? "Ask about your offices, workforce or portfolio" : "Ask a follow-up or clarify your question";
-  byId("send").textContent = needsDetail ? "Answer Here" : (fresh ? "Find dashboards" : "Send follow-up");
+  byId("send").textContent = needsDetail ? "Answer Here" : (fresh ? "Ask Nexora" : "Send follow-up");
 }
 
 async function readEvents(response) {

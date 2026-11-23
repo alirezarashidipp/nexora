@@ -18,6 +18,13 @@ can resolve a missing baseline or an unsupported request. SQLite supplies the di
 rows, SQL and bound parameters. The five synthetic databases cover London, Manchester,
 Dubai, Mumbai, Bengaluru and Shanghai, with ten tables and at most 20 rows each.
 
+For questions about offices outside the portfolio, the graph asks the user to choose a
+covered office. Coverage identified during discovery or source selection stops schema
+loading. For an identified office filter, a dropped or substituted city in the plan
+stops SQL execution. Identification of the requested offices still relies on the model.
+Regression coverage includes Delhi with and without a recommendation, a follow-up
+switch to London, omitted and substituted location filters, and YAML schema rejection.
+
 The AG-UI LangGraph adapter streams node progress and shared UI snapshots from the same
 checkpointed graph that holds conversation memory. One bounded checkpoint per thread
 retains business context. A server restart clears it. All six dashboard destinations start unconfigured.
@@ -28,7 +35,7 @@ step delivery over an actual HTTP stream while the simulated provider is still w
 This verifies integration and evidence on the fixtures. Live provider relevance and
 planning quality have not been measured on this branch.
 
-On 23 November 2026 all 63 Python tests, the database self-check, JavaScript checks,
+On 23 November 2026 all 69 Python tests, the database self-check, JavaScript checks,
 dependency check and Compose configuration validation passed. Headless desktop Chrome
 exercised the Employee workspace with a controlled provider response and real backend.
 It verified the old route redirects, discovery opens no field browser, Dubai headcount
@@ -91,18 +98,17 @@ The application and container never create, migrate, or seed it.
 
 ## Deliberate limits
 
-- The employee workspace exposes only the fixed SQLite table `data`.
+- The stateless `/ask` API queries the fixed SQLite table `data`.
 - There is no migration system; schema changes require database recreation or
   an externally managed database.
 - Each `/ask` request is independent. The separate `/ag-ui` route maintains thread memory.
-- Neither workspace imposes a result-row cap. The employee workspace sends query
-  rows to the answer model. The conversation workspace formats evidence directly
-  from SQLite and keeps rows outside conversation memory.
+- Both APIs return all matching rows unless the user requests a limit. The stateless
+  `/ask` path sends rows to its answer model. Employee Workspace formats its answer
+  from SQLite evidence and keeps raw rows outside the thread checkpoint.
 - The frontend targets desktop widths of 1180px and above; it has no mobile
   layout or dark appearance.
 - Charts require 2-20 rows with one unique text-label column and one numeric
-  column whose values are non-negative and not all zero. Pie requires 2-8
-  strictly positive values.
+  column whose values are non-negative and not all zero. The workspace displays a bar chart.
 - The employee workflow makes three model calls for a valid question. Conversation
   discovery makes one model call. Answer Here and follow-ups use a source-selection
   call followed by a scoped planning call when a source can be chosen.

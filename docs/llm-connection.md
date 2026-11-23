@@ -41,8 +41,8 @@ user message, `store=False`, and the configured temperature. Dictionaries/lists
 use `json.dumps(..., ensure_ascii=False)`. No explicit token limit is set.
 When supplied, the caller's JSON Schema uses `type=json_schema` and `strict=True`.
 The model/deployment must support these parameters. Unsupported parameters are
-not dropped or retried with changed semantics. Workflow schemas, refusal/empty
-response checks, and Pydantic validation remain in `app/workflow.py`.
+not dropped or retried with changed semantics. Workflow schemas live alongside their callers. Both graphs and the connection check use
+`app/model_output.py` to check completion status and validate structured responses.
 
 The SDKs use standard environment proxy support (`HTTPS_PROXY`, `NO_PROXY`).
 No key, secret, token, task data, or raw provider error is printed by the app.

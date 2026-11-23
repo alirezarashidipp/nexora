@@ -1,5 +1,4 @@
 import asyncio
-import sqlite3
 from contextlib import aclosing
 from typing import Literal
 from uuid import UUID
@@ -43,6 +42,33 @@ class ConversationAgent(LangGraphAgent):
         return conversation.public_state(self.memory, self.turn)
 
 
+def public_run_error(message):
+    question_errors = ("This turn has been superseded", "This conversation has expired", "Select a recommended dashboard",
+                       "Please enter the original question", "Choose Answer Here")
+    if message.startswith(question_errors):
+        return RunErrorEvent(code="question", message=message)
+    if message == "The language service is unavailable.":
+        return RunErrorEvent(code="provider", message="The language service is unavailable. Retry when it is connected.")
+    if message.startswith("Missing demo asset: "):
+        dataset = message.removeprefix("Missing demo asset: ").removesuffix(".db")
+        return RunErrorEvent(code="dataset", message=f"The {dataset} dataset is unavailable. Retry after it is restored.")
+    if message.startswith(("Missing demo table: ", "no such table: ", "Catalogue mismatch for ")):
+        return RunErrorEvent(code="dataset", message="The selected dataset does not match the catalogue. Retry after it is restored.")
+    return RunErrorEvent(code="analysis", message="The analysis could not be completed. Please retry.")
+
+
+def can_replay(runs, run_id, action):
+    if runs[run_id] != action:
+        return False
+    run_ids = list(runs)
+    later = [runs[key] for key in run_ids[run_ids.index(run_id) + 1:]]
+    if action == "discover":
+        return "discover" not in later
+    if action == "select":
+        return "discover" not in later and "select" not in later
+    return not later
+
+
 async def stream_turn(thread_id, run_id, intent, question, dashboard, dashboards):
     # The single-process demo serialises turns, including retries and checkpoint eviction.
     # A waiting request yields the event loop while the active SSE stream is running.
@@ -55,45 +81,31 @@ async def stream_turn(thread_id, run_id, intent, question, dashboard, dashboards
         action = intent.action
         previous = conversation.saver.get_tuple(config)
         memory = previous.checkpoint["channel_values"] if previous else {}
-        runs = memory.get("runs", [])
-        replay_discovery = run_id in runs and action in ("discover", "select")
+        runs = dict(memory.get("runs", {}))
+        replay_discovery = False
         if run_id in runs:
-            action = "restore"
+            replay_discovery = action in ("discover", "select")
+            action = "restore" if can_replay(runs, run_id, action) else "superseded"
         elif action != "restore":
-            runs = [*runs, run_id][-2 * conversation.HISTORY_SIZE:]
+            runs[run_id] = action
+            if len(runs) > 2 * conversation.HISTORY_SIZE:
+                del runs[next(iter(runs))]
         turn = dict(thread_id=thread_id, action=action, question=question, prior_question=intent.prior_question,
                     original_token=intent.original_token, clarification=intent.clarification.strip(),
                     dashboard=dashboard, dashboards=dashboards, work={"replay_discovery": replay_discovery})
         # Only bounded trusted state enters the checkpointer. The user message, provider context
         # and SQL results travel in the LangGraph run context for the lifetime of this request.
-        shared_state = {"runs": runs}
-        if action == "select" and memory.get("stage") == "discover" and dashboard in memory.get("matches", []):
-            shared_state["selected"] = dashboard
-        incoming = RunAgentInput(thread_id=thread_id, run_id=run_id, state=shared_state,
+        incoming = RunAgentInput(thread_id=thread_id, run_id=run_id, state={"runs": runs},
                                  messages=[], context=[], tools=[], forwarded_props={})
         async with aclosing(ConversationAgent(turn, memory).run(incoming)) as events:
             async for event in events:
                 if event.type == EventType.RUN_ERROR:
-                    safe_messages = ("Start a new conversation", "This conversation has expired",
-                                     "Select a recommended dashboard", "Please enter the original question", "Choose Answer Here")
-                    if event.message.startswith(safe_messages):
-                        yield RunErrorEvent(code="question", message=event.message)
-                    elif event.message == "The language service is unavailable.":
-                        yield RunErrorEvent(code="provider", message="The language service is unavailable. Retry when it is connected.")
-                    elif event.message.startswith("Missing demo asset: "):
-                        dataset = event.message.removeprefix("Missing demo asset: ").removesuffix(".db")
-                        yield RunErrorEvent(code="dataset", message=f"The {dataset} dataset is unavailable. Retry after it is restored.")
-                    elif event.message.startswith(("Missing demo table: ", "no such table: ", "Catalogue mismatch for ")):
-                        yield RunErrorEvent(code="dataset", message="The selected dataset does not match the catalogue. Retry after it is restored.")
-                    else:
-                        yield RunErrorEvent(code="analysis", message="The analysis could not be completed. Please retry.")
+                    yield public_run_error(event.message)
                     return
                 if event.type == EventType.RUN_FINISHED:
                     latest = conversation.saver.get_tuple(config)
-                    if action == "restore":
-                        conversation.replace_checkpoint(config, previous)
-                    else:
-                        conversation.replace_checkpoint(config, latest)
+                    keep = previous if action == "restore" else latest
+                    conversation.replace_checkpoint(config, keep)
                     if previous or action != "restore":
                         conversation.threads[thread_id] = None
                         conversation.threads.move_to_end(thread_id)
@@ -149,7 +161,7 @@ def agent_run(payload: RunAgentInput):
             raise HTTPException(422, "Select a dashboard by its catalogue ID.")
     try:
         dashboards = read_dashboards()
-    except (OSError, sqlite3.Error, ValueError):
+    except (OSError, ValueError):
         raise HTTPException(503, "The dashboard catalogue is unavailable.") from None
 
     async def events():

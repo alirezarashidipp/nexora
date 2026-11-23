@@ -2,13 +2,13 @@
 
 from typing import Literal
 
-from .catalogue import CITIES, DASHBOARDS, JOINS, find_dashboards, schema_context
-from .demo_queries import Plan, dimensions, needed_joins
-from .field_queries import FieldPlan, Record, scope_tables
+from .catalogue import JOINS, find_dashboards, schema_context
+from .demo_queries import METRIC_GROUPS, Plan, dimensions, needed_joins
+from .field_queries import FieldPlan, Record
 from .llm_connection import LLMConfigurationError, LLMConnectionError, LLMRequestRejectedError, create_completion, llm_connection
 from .prompts import load_prompt
-from .schema import DEMO_COLUMNS
-from .workflow import parse_output
+from .schema import CITIES, DEMO_COLUMNS
+from .model_output import parse_output
 
 
 class DashboardMatch(Record):
@@ -39,6 +39,7 @@ GAPS = {
 
 class Scope(Record):
     base: str | None
+    office_filters: list[str]
     joins: list[str]
     clarification: str | None
 
@@ -115,21 +116,13 @@ def discover(question: str, dashboards: list[dict], context: dict) -> tuple[list
         seen.add(key)
         basis = f"Shows {match.kpi.lower()} by {', '.join(card['dimensions'])}."
         matches.append(dict(dashboard_id=key, coverage=match.coverage, reason=reason,
-                            basis=basis, limitation=GAPS.get(match.gap, "")))
+                            basis=basis, limitation=GAPS.get(match.gap, ""),
+                            outside_coverage=any(city not in CITIES for city in match.requested_offices)))
         if len(matches) == 3:
             break
     if ranking.matches and not matches:
         return [], "invalid_ranking", ""
     return matches, "semantic", ""
-
-
-def context_for_question(question, selected, memory):
-    return {"question": question, "selected_dashboard": selected or None,
-            "original_question": memory.get("original_question", ""),
-            "discovery_clarification": memory.get("discovery_prompt", ""), "clarified_detail": memory.get("discovery_detail", ""),
-            "pending_question": memory.get("pending", ""), "last_clarification": memory.get("notice", ""),
-            "recent_questions": memory.get("history", []), "previous_plan": memory.get("plan", {}),
-            "recent_analyses": memory.get("analyses", []), "known_sources": memory.get("known_sources", [])}
 
 
 def choose_sources(context):
@@ -138,8 +131,7 @@ def choose_sources(context):
     return ask_model("conversation_scope", {**context, "office_locations": list(CITIES), "table_topics": TOPICS, "approved_paths": paths}, Scope)
 
 
-def plan_analysis(context, base, joins):
-    tables = scope_tables(base, joins)
+def plan_analysis(context, base, joins, tables):
     known = context["known_sources"]
     additional = [table for table in tables if table not in known]
     scoped = schema_context(additional, joins)
@@ -148,7 +140,7 @@ def plan_analysis(context, base, joins):
     prior = {table: {col: info["type"] for col, info in DEMO_COLUMNS[table].items()}
              for table in tables if table in known}
     metrics = {}
-    for report_id, report in DASHBOARDS.items():
+    for report_id, report in METRIC_GROUPS.items():
         if report.table != base:
             continue
         for key, measure in report.measures.items():
@@ -159,14 +151,34 @@ def plan_analysis(context, base, joins):
     return ask_model("conversation_plan", payload, Decision)
 
 
-def accepted_plan(decision, base, joins):
+def validate_office_filters(decision, required_offices):
+    if not required_offices:
+        return
+    if decision.plan:
+        cities = set(decision.plan.cities)
+    else:
+        cities = set()
+        names_by_code = {code: name for name, code in CITIES.items()}
+        for rule in decision.fields.filters:
+            field = rule.column.split(".")[-1]
+            if field not in ("office_name", "city_code", "contract_city", "office_id",
+                             "home_office_id", "visited_office_id", "lead_office_id"):
+                continue
+            if rule.operator in ("=", "in"):
+                cities.update(names_by_code.get(value, value) for value in rule.values)
+    if cities != set(required_offices):
+        raise ValueError("I could not verify the office filter for this question. Which offices should I include?")
+
+
+def accepted_plan(decision, base, joins, required_offices):
     if sum(item is not None for item in (decision.plan, decision.fields, decision.clarification)) != 1:
         raise ValueError("Which measure or fields would you like to explore?")
-    if decision.clarification:
-        raise ValueError(decision.clarification)
+    if decision.clarification is not None:
+        raise ValueError(decision.clarification.strip() or "Which measure or fields would you like to explore?")
+    validate_office_filters(decision, required_offices)
     if decision.fields:
         return {"base": base, "joins": joins, "fields": decision.fields.model_dump()}
-    for key, report in DASHBOARDS.items():
+    for key, report in METRIC_GROUPS.items():
         if report.table == base and decision.plan and decision.plan.metric in report.measures:
             if set(needed_joins(key, decision.plan)) <= set(joins):
                 return {"dashboard": key, "metric_plan": decision.plan.model_dump()}

@@ -1,10 +1,11 @@
 from typing import Literal, NotRequired, TypedDict
 
 from langgraph.graph import END, START, StateGraph
-from pydantic import BaseModel, ConfigDict, ValidationError
+from pydantic import BaseModel, ConfigDict
 
 from .llm_connection import create_completion, llm_connection
 from .database import describe_table, execute_sql
+from .model_output import parse_output, response_text
 from .prompts import load_prompt, render_prompt
 
 ReviewStatus = Literal["valid", "incomplete", "invalid"]
@@ -33,27 +34,6 @@ class SqlQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     sql: str
-
-
-def response_text(response) -> str:
-    choices = getattr(response, "choices", None)
-    if not isinstance(choices, (list, tuple)) or not choices:
-        raise ValueError("The model returned no choices.")
-    choice = choices[0]
-    message = getattr(choice, "message", None)
-    if getattr(choice, "finish_reason", None) != "stop" or getattr(message, "refusal", None):
-        raise ValueError("The model refused or did not complete the response.")
-    content = getattr(message, "content", None)
-    if not isinstance(content, str) or not content.strip():
-        raise ValueError("The model returned no content.")
-    return content
-
-
-def parse_output(response, output_type):
-    try:
-        return output_type.model_validate_json(response_text(response))
-    except ValidationError:
-        raise ValueError("The model returned an invalid structured response.") from None
 
 
 def review_question(state: WorkflowState) -> dict:

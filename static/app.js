@@ -3,16 +3,7 @@ const workspaceSearch = document.querySelector("#workspace-search");
 const fieldSearch = document.querySelector("#field-search");
 const fieldCount = document.querySelector("#field-count");
 const fieldsEmpty = document.querySelector("#fields-empty");
-const viewButtons = [...document.querySelectorAll("[data-view]")];
-function icon(name) {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.classList.add("icon");
-  svg.setAttribute("aria-hidden", "true");
-  const use = document.createElementNS("http://www.w3.org/2000/svg", "use");
-  use.setAttribute("href", `#i-${name}`);
-  svg.append(use);
-  return svg;
-}
+const viewButtons = document.querySelectorAll("[data-view]");
 
 function filterWorkspace() {
   const workspaceTerm = workspaceSearch.value.trim().toLowerCase();
@@ -27,8 +18,6 @@ function filterWorkspace() {
     ? `${fields.length} fields`
     : `${visibleFields} of ${fields.length} fields`;
   fieldsEmpty.hidden = visibleFields > 0;
-
-
 }
 
 workspaceSearch.addEventListener("input", filterWorkspace);
@@ -64,6 +53,22 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
+function directoryField(column) {
+  const template = document.querySelector("#directory-field");
+  const field = template.content.firstElementChild.cloneNode(true);
+  const type = column.type.split(" ")[0].toLowerCase();
+  const numeric = /INT|REAL|FLOA|DOUB|NUM|DEC/i.test(column.type);
+
+  field.dataset.search = [column.name, column.type, column.description, column.possible_values]
+    .join(" ").toLowerCase();
+  field.querySelector("strong").textContent = column.name;
+  field.querySelector(".field-copy small").textContent = numeric ? "Number" : type.charAt(0).toUpperCase() + type.slice(1);
+  if (numeric) field.querySelector("use").setAttribute("href", "#i-number");
+  field.querySelector(".field-description p").textContent = column.description;
+  field.querySelector(".field-description small").textContent = `Possible values: ${column.possible_values}`;
+  return field;
+}
+
 async function loadSchema() {
   const response = await fetch("/schema");
   const data = await response.json();
@@ -73,34 +78,9 @@ async function loadSchema() {
 
   document.querySelector("#dataset-name").textContent = data.table;
 
-  data.columns.forEach((column) => {
-    const field = document.createElement("article");
-    field.className = "field";
-    field.dataset.search = [column.name, column.type, column.description, column.possible_values]
-      .join(" ").toLowerCase();
-    const details = document.createElement("details");
-    const summary = document.createElement("summary");
-    const numeric = /INT|REAL|FLOA|DOUB|NUM|DEC/i.test(column.type);
-    const declaredType = column.type.split(" ")[0].toLowerCase();
-    const typeLabel = numeric ? "Number" : declaredType.replace(/^./, (letter) => letter.toUpperCase());
-    const symbol = chartElement("span", "field-icon");
-    symbol.append(icon(numeric ? "number" : "field"));
-    const copy = chartElement("span", "field-copy");
-    copy.append(
-      chartElement("strong", "", column.name),
-      chartElement("small", "", typeLabel),
-    );
-    const descriptionPanel = chartElement("div", "field-description");
-    const description = document.createElement("p");
-    description.textContent = column.description;
-    const values = document.createElement("small");
-    values.textContent = `Possible values: ${column.possible_values}`;
-    summary.append(symbol, copy);
-    descriptionPanel.append(description, values);
-    details.append(summary, descriptionPanel);
-    field.append(details);
-    schemaFields.append(field);
-  });
+  const fields = document.createDocumentFragment();
+  data.columns.forEach(column => fields.append(directoryField(column)));
+  schemaFields.replaceChildren(fields);
   filterWorkspace();
 }
 

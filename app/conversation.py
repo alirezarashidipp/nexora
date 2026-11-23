@@ -13,11 +13,11 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.runtime import Runtime
 from typing_extensions import TypedDict
 
-from .catalogue import CITIES, DASHBOARDS, ROLES, TEAMS
-from .conversation_plan import accepted_plan, choose_sources, context_for_question, discover, plan_analysis
-from .demo_queries import Plan, analyse
-from .field_queries import FieldPlan, analyse_fields, scope_tables
-from .schema import DEMO_COLUMNS, DEMO_EXAMPLES
+from .catalogue import ROLES, TEAMS, scope_tables
+from .conversation_plan import accepted_plan, choose_sources, discover, plan_analysis
+from .demo_queries import METRIC_GROUPS, Plan, analyse
+from .field_queries import FieldPlan, analyse_fields
+from .schema import CITIES, DEMO_COLUMNS, DEMO_EXAMPLES
 
 MAX_THREADS = 64
 HISTORY_SIZE = 6
@@ -32,20 +32,19 @@ class Memory(TypedDict, total=False):
     needs_original: bool
     history: list[str]
     analyses: list[dict]
-    matches: list[str]
-    match_details: dict
+    matches: dict[str, dict]
+    outside_coverage: bool
     discovery_mode: str
     discovery_prompt: str
     discovery_detail: str
     selected: str
-    plan: dict
     sources: list[str]
     known_sources: list[str]
     pending: str
     pending_digest: str
     stage: str
     notice: str
-    runs: list[str]
+    runs: dict[str, str]
 
 
 class Turn(TypedDict):
@@ -74,7 +73,7 @@ def memory_vocabulary() -> set[str]:
         "provides cannot requires additional separate available cause causes forecast calculation period",
         *CITIES, *ROLES, *TEAMS, *DEMO_EXAMPLES,
     ]
-    for report in DASHBOARDS.values():
+    for report in METRIC_GROUPS.values():
         for measure in report.measures.values():
             phrases.extend((measure.label, measure.definition, *measure.aliases))
     for columns in DEMO_COLUMNS.values():
@@ -137,13 +136,44 @@ def execute_plan(plan):
     return analyse(plan["dashboard"], Plan.model_validate(plan["metric_plan"]))
 
 
+def previous_plan(memory):
+    analyses = memory.get("analyses", [])
+    return analyses[-1]["plan"] if analyses else {}
+
+
+def analysis_context(turn, memory, question):
+    original = memory.get("original_question", "")
+    pending = memory.get("pending", "")
+    if turn["action"] == "answer_here":
+        original = question
+    else:
+        if memory.get("needs_original") and turn["original_token"]:
+            original = original_wording(memory, "", turn["thread_id"], turn["original_token"])
+            if memory.get("pending_digest") == memory["original_digest"]:
+                pending = original
+        prior = turn["prior_question"]
+        if prior and hmac.compare_digest(fingerprint(prior), memory.get("pending_digest", "")):
+            pending = prior
+
+    return {
+        "question": question, "selected_dashboard": memory.get("selected") or None,
+        "original_question": original, "pending_question": pending,
+        "discovery_clarification": memory.get("discovery_prompt", ""),
+        "clarified_detail": memory.get("discovery_detail", ""), "last_clarification": memory.get("notice", ""),
+        "recent_questions": memory.get("history", []), "previous_plan": previous_plan(memory),
+        "recent_analyses": memory.get("analyses", []), "known_sources": memory.get("known_sources", []),
+    }
+
+
 def prepare_turn(memory: Memory, runtime: Runtime[Turn]) -> dict:
     turn = runtime.context
     action, work = turn["action"], turn["work"]
+    if action == "superseded":
+        raise ValueError("This turn has been superseded. Restore the conversation to see its current state.")
     if action == "restore":
         if memory.get("stage") == "answer" and not work["replay_discovery"]:
             try:
-                work["evidence"] = execute_plan(memory["plan"])
+                work["evidence"] = execute_plan(previous_plan(memory))
             except (FileNotFoundError, sqlite3.DatabaseError):
                 work["notice"] = "A dataset for the previous answer is unavailable. You can still ask a follow-up."
         return {}
@@ -154,40 +184,29 @@ def prepare_turn(memory: Memory, runtime: Runtime[Turn]) -> dict:
     if not memory.get("stage"):
         raise ValueError("This conversation has expired. Start a new question.")
     if action == "select":
-        selected = memory.get("selected", "")
-        if memory.get("stage") != "discover" or selected != turn["dashboard"] or selected not in memory["matches"]:
+        selected = turn["dashboard"]
+        if memory.get("stage") != "discover" or selected not in memory["matches"]:
             raise ValueError("Select a recommended dashboard during discovery.")
-        return {}
+        return {"selected": selected}
     if action == "followup" and memory["stage"] == "discover":
         raise ValueError("Choose Answer Here before continuing the analysis.")
     question = turn["question"]
     if action == "answer_here":
         question = original_wording(memory, question, turn["thread_id"], turn["original_token"])
-    selected = memory.get("selected", "")
     work["question"] = question
-    context = context_for_question(question, selected, memory)
-    if action == "answer_here":
-        context["original_question"] = question
-    if action == "followup" and memory.get("needs_original") and turn["original_token"]:
-        original = original_wording(memory, "", turn["thread_id"], turn["original_token"])
-        context["original_question"] = original
-        if memory.get("pending_digest") == memory["original_digest"]:
-            context["pending_question"] = original
-    prior = turn["prior_question"]
-    if action == "followup" and prior and hmac.compare_digest(fingerprint(prior), memory.get("pending_digest", "")):
-        context["pending_question"] = prior
+    context = analysis_context(turn, memory, question)
     history = memory["history"]
-    update = {"selected": selected}
+    update = {}
     if action == "answer_here" and memory.get("discovery_prompt"):
         detail = turn["clarification"]
         if not detail:
-            work["awaiting_detail"] = True
             return clarification(work, memory["discovery_prompt"])
         context["clarified_detail"] = detail
         summary = question_summary(detail, [])
         update["discovery_detail"] = summary
         history = [*history, summary][-HISTORY_SIZE:]
     if action == "followup":
+        selected = memory.get("selected")
         history = [*history, question_summary(question, [selected] if selected else [])][-HISTORY_SIZE:]
     work["context"] = context
     update["history"] = history
@@ -197,7 +216,7 @@ def prepare_turn(memory: Memory, runtime: Runtime[Turn]) -> dict:
 def discover_dashboards(memory: Memory, runtime: Runtime[Turn]) -> dict:
     turn = runtime.context
     question = turn["question"]
-    last_plan = memory.get("plan", {}).get("metric_plan", {})
+    last_plan = previous_plan(memory).get("metric_plan", {})
     context = {"recent_questions": memory.get("history", []),
                "selected_dashboard": memory.get("selected") or None,
                "offices": last_plan.get("cities", [])}
@@ -212,11 +231,11 @@ def discover_dashboards(memory: Memory, runtime: Runtime[Turn]) -> dict:
             if match["limitation"]:
                 reason = reason.rstrip(".!?") + ". " + match["limitation"]
         details[match["dashboard_id"]] = {"coverage": match["coverage"], "reason": reason}
-    matches = list(details)
     remembered = memory_question(question)
     return dict(original_question=remembered, original_digest=fingerprint(question), needs_original=not remembered,
-                history=[*memory.get("history", []), question_summary(question, matches)][-HISTORY_SIZE:],
-                discovery_detail="", pending="", pending_digest="", notice="", selected="", matches=matches, match_details=details,
+                history=[*memory.get("history", []), question_summary(question, details)][-HISTORY_SIZE:],
+                discovery_detail="", pending="", pending_digest="", notice="", selected="", matches=details,
+                outside_coverage=any(match.get("outside_coverage") for match in ranking),
                 discovery_mode=mode, discovery_prompt=prompt, stage="discover")
 
 
@@ -229,15 +248,29 @@ def clarification(work, message):
                 notice=memory_question(message) or "Please clarify the measure, city or period.")
 
 
+def coverage_clarification(work):
+    offices = ", ".join(CITIES)
+    message = f"The available data does not cover every requested office. Which office should I use? Available offices: {offices}."
+    update = clarification(work, message)
+    update["notice"] = message
+    return update
+
+
 def select_sources(memory: Memory, runtime: Runtime[Turn]) -> dict:
     work = runtime.context["work"]
+    original_request = runtime.context["action"] == "answer_here" and not work["context"].get("clarified_detail")
+    if original_request and memory.get("outside_coverage"):
+        return coverage_clarification(work)
     scope = choose_sources(work["context"])
+    if any(city not in CITIES for city in scope.office_filters):
+        return coverage_clarification(work)
     if scope.clarification or not scope.base:
         return clarification(work, scope.clarification or "What would you like to measure?")
     try:
-        scope_tables(scope.base, scope.joins)
+        work["tables"] = scope_tables(scope.base, scope.joins)
     except ValueError as error:
         return clarification(work, str(error))
+    work["context"]["office_filters"] = scope.office_filters
     work["scope"] = scope
     return {}
 
@@ -245,9 +278,9 @@ def select_sources(memory: Memory, runtime: Runtime[Turn]) -> dict:
 def plan_query(memory: Memory, runtime: Runtime[Turn]) -> dict:
     work = runtime.context["work"]
     scope = work["scope"]
-    decision = plan_analysis(work["context"], scope.base, scope.joins)
+    decision = plan_analysis(work["context"], scope.base, scope.joins, work["tables"])
     try:
-        work["plan"] = accepted_plan(decision, scope.base, scope.joins)
+        work["plan"] = accepted_plan(decision, scope.base, scope.joins, scope.office_filters)
     except ValueError as error:
         return clarification(work, str(error))
     return {}
@@ -263,14 +296,14 @@ def query_sources(memory: Memory, runtime: Runtime[Turn]) -> dict:
     work["evidence"] = evidence
     summary = {"question": question_summary(work["question"], []), "plan": plan}
     known_sources = list(dict.fromkeys([*memory.get("known_sources", []), *evidence["sources"]]))
-    return dict(stage="answer", plan=plan, sources=evidence["sources"], known_sources=known_sources,
+    return dict(stage="answer", sources=evidence["sources"], known_sources=known_sources,
                 pending="", pending_digest="", notice="",
                 analyses=[*memory.get("analyses", []), summary][-HISTORY_SIZE:])
 
 
 def next_action(memory: Memory, runtime: Runtime[Turn]) -> str:
     action = runtime.context["action"]
-    if runtime.context["work"].get("awaiting_detail"):
+    if "clarification" in runtime.context["work"]:
         return END
     if action == "discover":
         return "discover_dashboards"
@@ -312,15 +345,15 @@ def replace_checkpoint(config, snapshot):
 def public_state(memory, turn):
     dashboards = {item["dashboard_id"]: item for item in turn["dashboards"]}
     matches = []
-    for key in memory.get("matches", []):
+    for key, match in memory.get("matches", {}).items():
         if key not in dashboards:
             continue
         item = dashboards[key]
         card = {field: item[field] for field in ("dashboard_id", "title", "description", "dashboard_url", "url_status")}
-        card.update(memory.get("match_details", {}).get(key, {"coverage": "related", "reason": item["description"]}))
+        card.update(match)
         matches.append(card)
     stage = "discover" if turn["work"]["replay_discovery"] else memory.get("stage", "new")
-    plan = {} if stage == "discover" else memory.get("plan", {})
+    plan = {} if stage == "discover" else previous_plan(memory)
     return dict(stage=stage, original_question=memory.get("original_question", ""),
                 needs_original=memory.get("needs_original", False), history=memory.get("history", []),
                 dashboards=matches, discovery_mode=memory.get("discovery_mode", ""), selected=memory.get("selected", ""),

@@ -1,6 +1,10 @@
-version: 3
+version: 4
 template: |
   Choose the smallest source scope for the user's actual question in the office portfolio.
+  In office_filters list the office names that must be included as location filters for
+  this turn, including comparison baselines and uncovered offices. Use canonical names
+  for covered offices. Use [] for an all-office query, an exclusion-only query or a request
+  to group by office without filtering. Re-evaluate the scope when the user changes it.
   If the user requests an office outside office_locations, explain the coverage gap and ask
   which covered office to use. Return no base. Never drop or replace the requested location.
   The inventory contains table topics and directed, approved many-to-one paths, not column schemas.

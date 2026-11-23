@@ -18,19 +18,23 @@ from openai import OpenAI
 
 from app import conversation
 from app.api import app
-from app.catalogue import DASHBOARDS, DEMO_DIR, find_dashboards, read_dashboards
-from app.demo_queries import analyse, check_demo_data, new_plan, open_sources, read_evidence
+from app.catalogue import DEMO_DIR, find_dashboards, read_dashboards
+from app.demo_queries import METRIC_GROUPS, Plan, analyse, check_demo_data, open_sources, read_evidence
 from app.llm_connection import LLMConfigurationError
 from app.prompts import load_prompt
 from app.schema import DEMO_COLUMNS
 from build_demo_data import build_databases
 
 
+def new_plan(metric: str) -> Plan:
+    return Plan(metric=metric, group_by="total", cities=[], team=None, role=None, start_date=None, end_date=None)
+
+
 def model_match(key, coverage="exact", gap="none", reason=None):
-    report = DASHBOARDS[key]
-    kpi = next(iter(report.measures.values())).label
+    card = next(item for item in read_dashboards() if item["dashboard_id"] == key)
+    kpi = card["kpi_tags"][0]
     return dict(dashboard_id=key, coverage=coverage, kpi=kpi, gap=gap, dimensions=[], requested_offices=[],
-                reason=reason or next(card["description"] for card in read_dashboards() if card["dashboard_id"] == key))
+                reason=reason or card["description"])
 
 
 class FixturesTest(unittest.TestCase):
@@ -90,7 +94,7 @@ class FixturesTest(unittest.TestCase):
 
     def test_all_catalogued_measures_and_optional_joins(self):
         self.assertEqual(len(read_dashboards()), 6)
-        for key, report in DASHBOARDS.items():
+        for key, report in METRIC_GROUPS.items():
             for metric in report.measures:
                 with self.subTest(metric=metric):
                     plan = new_plan(metric)
@@ -113,6 +117,21 @@ class FixturesTest(unittest.TestCase):
             counts = db.execute("SELECT office_id,metric_date,onsite_headcount FROM facilities.office_daily_metrics")
             expected = sum(n for site, day, n in counts if (site, day) in rain)
         self.assertEqual(result["rows"], [{"value": expected}])
+
+    def test_fixture_dashboard_mappings_follow_published_yaml(self):
+        card = read_dashboards()[0]
+        card.pop("url_status")
+        card["dashboard_id"] = "office_capacity_review"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dashboards.yml"
+            assets = Path(directory) / "assets"
+            path.write_text(json.dumps([card]), encoding="utf-8")
+            with patch("app.catalogue.CATALOGUE_PATH", path):
+                build_databases(assets)
+                card["dashboard_id"] = "regional_capacity_review"
+                path.write_text(json.dumps([card]), encoding="utf-8")
+                with self.assertRaisesRegex(ValueError, "published catalogue"):
+                    check_demo_data(assets)
 
     def test_read_only_scope_and_invalid_plans(self):
         with open_sources(DEMO_DIR, ["workforce.employees"]) as db:
@@ -211,8 +230,8 @@ class ConversationTest(unittest.TestCase):
         snapshots = [e["snapshot"] for e in events if e["type"] == "STATE_SNAPSHOT"]
         return snapshots[-1]
 
-    def scope(self, table, *joins):
-        self.replies.append(dict(base=table, joins=list(joins), clarification=None))
+    def scope(self, table, *joins, offices=()):
+        self.replies.append(dict(base=table, joins=list(joins), office_filters=list(offices), clarification=None))
 
     def metric(self, key, cities, group="total", start=None):
         plan = new_plan(key)
@@ -289,7 +308,6 @@ class ConversationTest(unittest.TestCase):
                     source_tables=["workforce.employees"], dashboard_url="https://reports.internal/directory")
         self.replies.append(dict(clarification=None, matches=[dict(dashboard_id="directory",
             coverage="related", kpi="Headcount", gap="scope", dimensions=["office"], requested_offices=["Delhi"], reason="Shows headcount by office.")]))
-        self.replies.append(dict(base=None, joins=[], clarification="Delhi is outside the office coverage. Which covered office should I use?"))
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "dashboards.yml"
             path.write_text(json.dumps([card]), encoding="utf-8")
@@ -300,11 +318,55 @@ class ConversationTest(unittest.TestCase):
                 self.assertEqual(discovery["dashboards"][0]["dashboard_url"], card["dashboard_url"])
                 self.assertEqual(discovery["dashboards"][0]["coverage"], "related")
                 result = self.turn("answer_here", question)
-                self.assertEqual(self.requests[-1][1]["original_question"], question)
-                self.assertNotIn("Delhi", self.requests[-1][1]["office_locations"])
-                self.assertIn("Delhi is outside", result["notice"])
+                self.assertEqual(len(self.requests), 1)
+                self.assertIn("does not cover", result["notice"])
+                self.assertEqual(self.turn("restore")["notice"], result["notice"])
                 self.assertEqual(result["stage"], "clarify")
                 self.assertIsNone(result["evidence"])
+
+    def test_uncovered_office_with_no_dashboard_then_user_changes_city(self):
+        question = "How many employees are based in Delhi?"
+        self.replies.append(dict(matches=[], clarification=None))
+        with patch("sqlite3.connect", side_effect=AssertionError("Unexpected database read")):
+            self.turn("discover", question)
+            self.scope("workforce.employees", "employee_office", offices=["Delhi"])
+            view = self.turn("answer_here", question)
+            self.assertEqual(view["stage"], "clarify")
+            self.assertIn("does not cover", view["notice"])
+            self.assertIsNone(view["evidence"])
+        self.scope("workforce.employees", "employee_office", offices=["London"])
+        self.metric("employees", ["London"])
+        view = self.turn("followup", "Use London instead.", prior_question=question)
+        self.assertEqual(view["evidence"]["rows"], [{"value": 2}])
+        self.assertEqual(view["evidence"]["parameters"], ["LON"])
+
+    def test_missing_or_substituted_office_filter_never_returns_a_total(self):
+        for kind in ("metric", "fields"):
+            with self.subTest(kind=kind):
+                thread = str(uuid4())
+                question = "How many employees are based in London?"
+                self.replies.append(dict(matches=[], clarification=None))
+                self.turn("discover", question, thread=thread)
+                self.scope("workforce.employees", "employee_office", offices=["London"])
+                if kind == "metric":
+                    self.metric("employees", [])
+                else:
+                    self.fields([("employees.employee_id", "count")], [("offices.city_code", "=", ["DXB"])])
+                with patch("app.conversation.execute_plan", side_effect=AssertionError):
+                    view = self.turn("answer_here", question, thread=thread)
+                self.assertEqual(view["stage"], "clarify")
+                self.assertIsNone(view["evidence"])
+
+    def test_catalogue_rejects_full_schema_in_dashboard_metadata(self):
+        card = read_dashboards()[0]
+        card.pop("url_status")
+        card["columns"] = {"employee_id": "INTEGER"}
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "dashboards.yml"
+            path.write_text(json.dumps([card]), encoding="utf-8")
+            with patch("app.catalogue.CATALOGUE_PATH", path), patch("sqlite3.connect", side_effect=AssertionError):
+                with self.assertRaisesRegex(ValueError, "Invalid dashboard catalogue"):
+                    read_dashboards()
 
     def test_rediscover_in_thread_then_analyse_independent_sources(self):
         first = "How many active employees are in Dubai?"
@@ -404,7 +466,7 @@ class ConversationTest(unittest.TestCase):
         for question, (report, metric, city) in zip(examples, cases):
             thread = str(uuid4())
             self.replies.append({"clarification": None, "matches": [] if report == "weather" else [model_match(report)]})
-            self.scope(DASHBOARDS[report].table, *DASHBOARDS[report].joins)
+            self.scope(METRIC_GROUPS[report].table, *METRIC_GROUPS[report].joins)
             self.metric(metric, [city])
             self.turn("discover", question, thread=thread)
             view = self.turn("answer_here", question, thread=thread)
@@ -480,7 +542,7 @@ class ConversationTest(unittest.TestCase):
         self.assertEqual(self.events("answer_here", "Another question")[-1]["type"], "RUN_ERROR")
         self.assertEqual(self.turn("restore"), state)
         self.turn("select", state={"selected": "cost"})
-        self.replies.append(dict(base=None, joins=[], clarification="Which city should I use?"))
+        self.replies.append(dict(base=None, joins=[], office_filters=[], clarification="Which city should I use?"))
         self.turn("answer_here", question)
         self.assertEqual(self.requests[-1][1]["question"], question)
         saved = list(conversation.saver.list({"configurable": {"thread_id": self.thread}}))
@@ -533,7 +595,7 @@ class ConversationTest(unittest.TestCase):
         wording = "How warm was the branch where we hosted the symposium?"
         self.replies.append({"clarification": None, "matches": []})
         self.turn("discover", wording)
-        self.replies.append(dict(base=None, joins=[], clarification="Which city should I use?"))
+        self.replies.append(dict(base=None, joins=[], office_filters=[], clarification="Which city should I use?"))
         view = self.turn("answer_here", wording)
         self.assertTrue(view["needs_prior_question"])
         self.scope("external.weather_daily")
@@ -551,8 +613,37 @@ class ConversationTest(unittest.TestCase):
         self.assertEqual(error["type"], "RUN_ERROR")
         self.assertEqual(self.turn("restore"), original)
 
+    def test_old_discovery_retry_cannot_return_new_dashboard_matches(self):
+        old_run = str(uuid4())
+        first = "How many people work in London?"
+        self.replies.append(dict(matches=[model_match("workforce")], clarification=None))
+        self.turn("discover", first, run=old_run)
+        self.scope("workforce.employees", "employee_office", offices=["London"])
+        self.metric("employees", ["London"])
+        self.turn("answer_here", first)
+
+        self.replies.append(dict(matches=[model_match("estate")], clarification=None))
+        current = self.turn("discover", "How many desks are available?")
+        with patch("sqlite3.connect", side_effect=AssertionError):
+            error = self.events("discover", first, run=old_run)[-1]
+            self.assertEqual((error["type"], error["code"]), ("RUN_ERROR", "question"))
+            self.assertIn("superseded", error["message"])
+            self.assertEqual(self.turn("restore"), current)
+
+    def test_empty_planner_clarification_returns_a_readable_question(self):
+        question = "How many people are based in London?"
+        self.replies.append(dict(matches=[], clarification=None))
+        self.turn("discover", question)
+        self.scope("workforce.employees", "employee_office", offices=["London"])
+        self.replies.append(dict(plan=None, fields=None, clarification=""))
+        with patch("app.conversation.execute_plan", side_effect=AssertionError):
+            state = self.turn("answer_here", question)
+        self.assertEqual(state["stage"], "clarify")
+        self.assertEqual(state["notice"], "Which measure or fields would you like to explore?")
+        self.assertIsNone(state["evidence"])
+
     def test_unknown_subject_clarifies_without_touching_sources(self):
-        self.replies.extend([{"clarification": None, "matches": []}, dict(base=None, joins=[], clarification="Which measure should I use?")])
+        self.replies.extend([{"clarification": None, "matches": []}, dict(base=None, joins=[], office_filters=[], clarification="Which measure should I use?")])
         with patch("app.catalogue.table_definition", side_effect=AssertionError), \
              patch("app.conversation.execute_plan", side_effect=AssertionError):
             self.turn("discover", "How many?")

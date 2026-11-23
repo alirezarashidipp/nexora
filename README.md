@@ -11,6 +11,8 @@ cards and opens zero SQLite connections. Only provider unavailability activates
 **Keyword fallback**. A valid empty ranking or a rejected model result still offers
 **Answer Here**. Analytical turns require a working model.
 
+A question about an uncovered office such as Delhi can still receive related dashboard suggestions. On Answer Here, an identified coverage gap prompts the user to choose a covered office. The clarification continues in the same thread.
+
 Each new conversation gets its own thread. One server process holds up to 64 conversations
 in RAM. Restarting it clears their memory.
 
@@ -118,8 +120,7 @@ question
   -> validate SQL
   -> run read-only SQLite query
   -> generate grounded answer
-  -> inspect returned rows in the browser
-       -> compatible two-column result: render Bar and offer valid chart options
+  -> return answer, SQL and rows to the API client
 ```
 
 Prompts live in `prompts/*.yml`; the fixed table name and dataset-specific

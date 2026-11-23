@@ -20,4 +20,3 @@ if not DB_PATH.is_absolute():
     DB_PATH = ROOT / DB_PATH
 
 STATIC_DIR = ROOT / "static"
-PROMPTS_DIR = ROOT / "prompts"

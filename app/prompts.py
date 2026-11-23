@@ -1,8 +1,9 @@
 from functools import cache
+from pathlib import Path
 
 import yaml
 
-from .config import PROMPTS_DIR
+PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
 
 @cache

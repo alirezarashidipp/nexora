@@ -8,8 +8,9 @@ from contextlib import closing
 from datetime import date, timedelta
 from pathlib import Path
 
-from app.catalogue import CITIES, DEMO_DIR, ROLES, TEAMS, published_dashboards
-from app.schema import DEMO_COLUMNS, DEMO_KEYS, OFFICES
+from app.catalogue import DEMO_DIR, ROLES, TEAMS, published_dashboards
+from app.demo_queries import check_demo_data
+from app.schema import CITIES, DEMO_COLUMNS, DEMO_KEYS, OFFICES
 
 
 def sample_rows() -> dict[str, list]:
@@ -89,7 +90,6 @@ def build_databases(output: Path) -> None:
                 with db:
                     db.execute(f"CREATE TABLE {table} (" + ", ".join(definitions) + ")")
                     db.executemany(f"INSERT INTO {table} VALUES ({placeholders})", rows[qualified])
-        from app.demo_queries import check_demo_data
         check_demo_data(assets)
         assets.rename(output)
 

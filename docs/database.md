@@ -4,8 +4,9 @@
 
 The five files in `demo_data/` contain only fictional data. The catalogue
 in `app/schema.py` defines ordered columns, SQLite types, aliases, possible
-values, units and primary keys. `app/catalogue.py` defines the business measures,
-aggregation grain, approved many-to-one paths and dashboard-to-table mappings.
+values, units and primary keys. `app/dashboards.yml` owns the published dashboard-to-table mappings.
+`app/demo_queries.py` defines business measures and their aggregation grain. Both metric
+and custom queries use the approved join paths in `app/catalogue.py`.
 
 | Database | Tables | Grain |
 | --- | --- | --- |

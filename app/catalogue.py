@@ -1,4 +1,4 @@
-"""The approved measures and join paths in the five fictional databases."""
+"""Load published dashboard metadata and resolve the approved analytical schema."""
 
 import json
 import os
@@ -11,9 +11,9 @@ from typing import NamedTuple
 from urllib.parse import urlsplit
 
 import yaml
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from .schema import CITIES, DEMO_COLUMNS, DEMO_KEYS
+from .schema import DEMO_COLUMNS, DEMO_KEYS
 
 DEMO_DIR = Path(__file__).resolve().parent.parent / "demo_data"
 TEAMS = ("Platform", "Delivery", "Insights")
@@ -42,78 +42,18 @@ JOINS = {
 }
 
 
-class Measure(NamedTuple):
-    label: str
-    unit: str
-    definition: str
-    aggregate: str
-    aliases: tuple[str, ...] = ()
-
-
-class Dashboard(NamedTuple):
-    table: str
-    joins: tuple[str, ...]
-    measures: dict[str, Measure]
-    date_column: str = ""
-    condition: str = ""
-
-
-DASHBOARDS = {
-    "workforce": Dashboard("workforce.employees", ("employee_office",), {
-            "employees": Measure("Active employees", "people", "Count distinct active workers by home office.", "COUNT(DISTINCT employees.employee_id)"),
-            "workforce_fte": Measure("Active workforce capacity", "FTE", "Sum contracted FTE for active workers.", "SUM(employees.fte)"),
-        }, condition="employees.active = 1"),
-    "schedule": Dashboard("workforce.weekly_schedule", ("schedule_employee", "employee_office"), {
-            "planned_days": Measure("Planned onsite days", "person-days", "Sum the five weekday flags per worker-week.", "SUM(mon + tue + wed + thu + fri)"),
-        }, "weekly_schedule.week_start"),
-    "visits": Dashboard("workforce.badge_visits", ("visit_office",), {
-            "visits": Measure("Badge visits", "visits", "Count individual visits at the visited office.", "COUNT(badge_visits.visit_id)"),
-        }, "badge_visits.visit_date"),
-    "estate": Dashboard("locations.offices", (), {
-            "seats": Measure("Seat capacity", "seats", "Sum seats once per office.", "SUM(offices.seat_capacity)"),
-            "floor_area": Measure("Floor area", "m²", "Sum internal floor area once per office.", "SUM(offices.floor_area_sqm)",
-                                  ("floor space", "square metres", "square meters")),
-            "rent": Measure("Monthly rent", "GBP/month", "Sum monthly leases once per office.", "SUM(offices.monthly_rent_gbp)"),
-        }),
-    "portfolio": Dashboard("portfolio.portfolio_projects", ("project_office",), {
-            "staffing_gap": Measure("Project staffing gap", "FTE", "Sum positive required minus assigned FTE per project.", "SUM(MAX(0, required_fte - assigned_fte))"),
-            "assigned": Measure("Assigned capacity", "FTE", "Sum assigned FTE per project.", "SUM(assigned_fte)"),
-        }, "portfolio_projects.due_date"),
-    "hiring": Dashboard("portfolio.hiring_requests", ("hiring_office",), {
-            "open_fte": Measure("Open hiring capacity", "FTE", "Sum open FTE across open requisitions.", "SUM(hiring_requests.open_fte)"),
-        }, "hiring_requests.expected_start_date", "hiring_requests.status = 'Open'"),
-    "occupancy": Dashboard("facilities.office_daily_metrics", ("metrics_office",), {
-            "attendance": Measure("Recorded attendance", "person-days", "Sum daily distinct onsite counts. A person can attend on several days.", "SUM(office_daily_metrics.onsite_headcount)"),
-            "utilisation": Measure("Peak seat utilisation", "%", "Capacity-weighted mean daily peak occupancy across recorded office-days.",
-                                   "ROUND(100.0 * SUM(peak_occupancy) / NULLIF(SUM(seat_capacity), 0), 2)"),
-        }, "office_daily_metrics.metric_date"),
-    "cost": Dashboard("facilities.office_daily_metrics", ("metrics_office",), {
-            "energy": Measure("Energy use", "kWh", "Sum metered energy per office-day.", "ROUND(SUM(energy_kwh), 2)",
-                              ("power consumption", "meter readings")),
-            "energy_cost": Measure("Energy cost", "GBP", "Sum electricity charges per office-day.", "ROUND(SUM(energy_cost_gbp), 2)"),
-            "operating_cost": Measure("Operating cost", "GBP", "Sum energy and other daily costs, excluding rent.", "ROUND(SUM(energy_cost_gbp + other_cost_gbp), 2)"),
-        }, "office_daily_metrics.metric_date"),
-    "weather": Dashboard("facilities.office_daily_metrics", ("metrics_office", "office_weather"), {
-            "rain_attendance": Measure("Rainy-day attendance", "person-days", "Sum attendance only where the same city and date recorded precipitation.", "SUM(onsite_headcount)"),
-        }, "office_daily_metrics.metric_date", "weather_daily.rain_mm > 0"),
-    "closures": Dashboard("external.holiday_calendar", ("holiday_office",), {
-            "closures": Measure("Office closures", "office-days", "Count office-local holiday dates marked closed.", "COUNT(holiday_calendar.holiday_date)"),
-        }, "holiday_calendar.holiday_date", "holiday_calendar.office_closed = 1"),
-}
-
-def source_tables(report: Dashboard, joins=None) -> list[str]:
-    paths = report.joins if joins is None else joins
-    return [report.table] + [JOINS[name].target for name in paths]
-
-
-def dashboard_sources(report_id: str) -> list[str]:
-    report = DASHBOARDS[report_id]
-    joins = list(report.joins)
-    if report_id == "visits":
-        joins.append("visit_employee")
-    if report_id == "hiring":
-        joins.append("hiring_project")
-    return source_tables(report, joins)
+def scope_tables(base: str, joins: list[str]) -> list[str]:
+    if base not in DEMO_COLUMNS or base == "locations.dashboard_catalog":
+        raise ValueError("Choose an available analytical source.")
+    tables = [base]
+    names = {base.split(".")[1]}
+    for name in joins:
+        join = JOINS.get(name)
+        if not join or join.target in tables or any(left.split(".")[0] not in names for left, _ in join.keys):
+            raise ValueError("These sources have no approved join at this grain.")
+        tables.append(join.target)
+        names.add(join.target.split(".")[1])
+    return tables
 
 
 def database_uri(directory: Path, name: str) -> str:
@@ -124,6 +64,8 @@ def database_uri(directory: Path, name: str) -> str:
 
 
 class PublishedDashboard(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     dashboard_id: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
     title: str = Field(min_length=1)
     description: str = Field(min_length=1)
