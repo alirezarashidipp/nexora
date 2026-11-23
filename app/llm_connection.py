@@ -10,7 +10,10 @@ from pathlib import Path
 from azure.core.exceptions import AzureError
 from azure.identity import EnvironmentCredential, get_bearer_token_provider
 from dotenv import load_dotenv
-from openai import AzureOpenAI, OpenAI, OpenAIError
+from openai import (
+    APIResponseValidationError, AzureOpenAI, BadRequestError, ContentFilterFinishReasonError,
+    LengthFinishReasonError, OpenAI, OpenAIError, UnprocessableEntityError,
+)
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -25,6 +28,10 @@ class LLMConfigurationError(ValueError):
 
 class LLMConnectionError(RuntimeError):
     """A provider failure with no sensitive diagnostic details."""
+
+
+class LLMRequestRejectedError(LLMConnectionError):
+    """The provider was reachable but could not accept the model request."""
 
 
 def load_local_env() -> None:
@@ -139,5 +146,8 @@ def create_completion(client, model: str, instructions: str, task_data, *, json_
         return response
     except AzureError:
         raise LLMConnectionError("Azure authentication or token acquisition failed. Check the Azure configuration and access.") from None
+    except (APIResponseValidationError, BadRequestError, ContentFilterFinishReasonError,
+            LengthFinishReasonError, UnprocessableEntityError):
+        raise LLMRequestRejectedError("The language service could not return a valid response.") from None
     except OpenAIError:
         raise LLMConnectionError("The LLM request failed. Check credentials, connectivity, and model parameter support.") from None

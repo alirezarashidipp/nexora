@@ -31,7 +31,10 @@ cardinalities and publishes the directory only after validation. Stop the servic
 before replacing fixture files. `python main.py --check` validates the shipped set.
 The 20-row ceiling applies to fixture provisioning. Queries return every matching group.
 
-By default all ten dashboard URLs point to fictional example.org destinations.
+The in-memory discovery catalogue and the offline `locations.dashboard_catalog` fixture
+share the same published metadata definitions. The fixture contains example.org placeholders.
+The workspace displays a link only when its destination has been configured. An absent or
+unusable destination leaves the recommendation and Answer Here available.
 To activate real links, set `NEXORA_DASHBOARD_URLS_FILE` to a JSON file mapping
 any dashboard IDs to HTTPS URLs. This entry configures the workforce dashboard.
 

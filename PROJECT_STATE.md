@@ -4,10 +4,12 @@ Last updated: 2026-11-23
 
 ## Status
 
-The desktop workspace supports **Ask Once → Discover → Answer Here → Continue**.
-Dashboard discovery asks the configured language model to rank ten fictional dashboards
-using their titles, descriptions, keywords and KPI labels. The UI identifies keyword
-fallback when the model is unavailable or returns an invalid ranking.
+The desktop workspace supports **Ask Once → Discover → Choose → Investigate → Verify → Continue**.
+Every discovery asks the language model to rank the ten metadata entries. Up to three
+cards explain exact or related coverage. A configured link opens the dashboard and
+Answer Here retains the original question. The router opens no SQLite connections.
+Keyword fallback applies only when the language service is unavailable. Invalid model
+rankings and valid empty results have distinct states.
 
 Answer Here routes every question through model-based source selection and planning.
 Suggested questions use the same path as typed questions. The planner can choose a
@@ -27,10 +29,11 @@ step delivery over an actual HTTP stream while the simulated provider is still w
 This verifies integration and evidence on the fixtures. Live provider relevance and
 planning quality have not been measured on this branch.
 
-On 23 November 2026 the full suite passed 56 Python tests. The database self-check,
+On 23 November 2026 the full suite passed 60 Python tests. The database self-check,
 JavaScript checks and Compose validation also passed. A desktop Chrome walkthrough
-used a simulated provider and the real application to verify dashboard selection,
-Answer Here, a two-city comparison, SQL evidence, reload and keyword fallback.
+used a simulated provider and the real application to verify recommendation reasons,
+configured navigation, missing links, Answer Here after a reload, and a two-city
+comparison whose chart matched the SQL evidence. It also exercised clarification.
 
 The schema-guided SQL application is runnable locally and through Docker. A
 user can ask about the fixed SQLite table `data`, receive validation or clarification, inspect

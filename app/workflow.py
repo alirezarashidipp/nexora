@@ -36,12 +36,14 @@ class SqlQuery(BaseModel):
 
 
 def response_text(response) -> str:
-    if not response.choices:
+    choices = getattr(response, "choices", None)
+    if not isinstance(choices, (list, tuple)) or not choices:
         raise ValueError("The model returned no choices.")
-    choice = response.choices[0]
-    if choice.finish_reason != "stop" or choice.message.refusal:
+    choice = choices[0]
+    message = getattr(choice, "message", None)
+    if getattr(choice, "finish_reason", None) != "stop" or getattr(message, "refusal", None):
         raise ValueError("The model refused or did not complete the response.")
-    content = choice.message.content
+    content = getattr(message, "content", None)
     if not isinstance(content, str) or not content.strip():
         raise ValueError("The model returned no content.")
     return content

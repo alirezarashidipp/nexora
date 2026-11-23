@@ -14,6 +14,8 @@ Send an AG-UI `RunAgentInput` and accept `text/event-stream`. Use a UUID for
 each new conversation and a fresh run UUID for each action. Retry a failed
 delivery with the same run ID. The server uses the last plain-text user message
 and its own checkpoint. Arbitrary client state never becomes conversation memory.
+Retries of successful discovery and selection actions replay the recommendations
+without reopening analytical sources.
 
 ```json
 {
@@ -28,21 +30,39 @@ and its own checkpoint. Arbitrary client state never becomes conversation memory
 | --- | --- | --- |
 | `discover` | First question in a new thread | Ranked dashboard metadata |
 | `select` | Recommended ID in `state.selected` (also accepts `forwardedProps.dashboard`) | Synchronised selection |
-| `answer_here` | Same thread, optional original message | Answer to the original question or a clarification |
-| `followup` | New user message, same thread | Contextual analysis or a clarification |
+| `answer_here` | Same thread, original message or tab token when required | Answer to the original question or a clarification |
+| `followup` | New user message after choosing Answer Here | Contextual analysis or a clarification |
 | `restore` | Thread ID and empty messages | Current view, or a fresh view for an expired thread |
 
 The adapter emits `RUN_STARTED`, `STEP_STARTED` and `STEP_FINISHED` for executed
 graph nodes, shared `STATE_SNAPSHOT` events, a `MESSAGES_SNAPSHOT` and `RUN_FINISHED`.
-A discovery snapshot includes `discovery_mode` (`semantic` or `keyword_fallback`) and
-ranked dashboard cards. An answer snapshot includes `evidence.sql`, `parameters`,
+A discovery snapshot includes `discovery_mode` and up to three ranked dashboard cards.
+Each card carries `dashboard_id`, `title`, `description`, `coverage` (`exact` or `related`),
+`reason`, `url_status` and a nullable `dashboard_url`. Only configured HTTPS destinations
+are actionable. If the model needs more detail, `discovery_clarification` holds a short
+question. The browser submits the reply as `forwardedProps.clarification` on Answer Here
+and the planner receives both the original question and the user's detail.
+
+| Discovery mode | Meaning |
+| --- | --- |
+| `semantic` | The model supplied a validated ranking, possibly empty. |
+| `keyword_fallback` | The service was unavailable. Matches are labelled related. |
+| `invalid_ranking` | A reachable provider returned an unusable response. The list is empty and Answer Here is available. |
+
+For private original wording, a successful discovery emits a `CUSTOM` event named
+`original_question_token`. The client keeps this opaque value in tab session storage
+and can pass it as `forwardedProps.original_token` on Answer Here after reloading.
+The server binds it to the originating thread and verifies the recovered wording.
+
+An answer snapshot includes `evidence.sql`, `parameters`,
 `rows`, `sources`, the definition and units. Custom field plans support grouped or detail
 rows. When a clarification sets `needs_prior_question`, the browser may echo the
 previous wording in `forwardedProps.prior_question` on the next follow-up. The server
 verifies it against the pending question's fingerprint. Parameters appear in their SQLite binding order. Client-provided filters, SQL and
 history cannot replace server state.
 
-A failed run emits `RUN_ERROR` and preserves the previous committed turn. The client
+A missing source file produces a `RUN_ERROR` with code `dataset` and the affected
+dataset name. A failed run preserves the previous committed turn. The client
 can retry with the same run ID. A malformed request receives HTTP 422. The examples from
 `GET /conversation/examples` are starter text and follow the usual model and query path.
 

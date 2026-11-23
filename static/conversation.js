@@ -2,10 +2,12 @@
 
 const byId = id => document.getElementById(id);
 const threadKey = "nexora.conversation.id";
+const tokenKey = "nexora.conversation.original";
 let threadId = sessionStorage.getItem(threadKey) || crypto.randomUUID();
 sessionStorage.setItem(threadKey, threadId);
 let state = {stage: "new"};
 let originalDraft = "";
+let originalToken = sessionStorage.getItem(tokenKey) || "";
 let pendingDraft = "";
 let busy = false;
 let retry = null;
@@ -20,6 +22,8 @@ function renderMatches(items) {
   const list = byId("matches");
   list.replaceChildren();
   for (const item of items) {
+    const card = document.createElement("article");
+    card.className = "dashboard-match";
     const label = document.createElement("label");
     const input = document.createElement("input");
     input.type = "radio";
@@ -27,18 +31,27 @@ function renderMatches(items) {
     input.checked = item.dashboard_id === state.selected;
     const select = () => sendTurn("select", "", item.dashboard_id);
     input.addEventListener("change", select);
-    label.append(input, element("strong", item.title), element("small", item.description));
+    const coverage = element("span", item.coverage === "exact" ? "Exact answer" : "Related information");
+    coverage.className = "coverage " + item.coverage;
+    label.append(input, element("strong", item.title), coverage);
+    card.append(label, element("p", item.reason));
     if (item.url_status === "configured") {
       const link = element("a", "Open dashboard ↗");
       link.href = item.dashboard_url;
       link.target = "_blank";
       link.rel = "noopener noreferrer";
-      link.addEventListener("click", select);
-      label.append(link);
+      link.addEventListener("click", () => { if (!input.checked) select(); });
+      card.append(link);
+    } else {
+      card.append(element("small", item.url_status === "placeholder" ? "Dashboard link not configured" : "Dashboard link unavailable"));
     }
-    list.append(label);
+    list.append(card);
   }
-  if (!items.length) list.append(element("p", "No matching dashboard found."));
+  if (!items.length) {
+    const empty = state.discovery_mode === "invalid_ranking" ? "The model’s ranking could not be verified."
+      : "No dashboard match found.";
+    list.append(element("p", empty + " Choose Answer Here to investigate."));
+  }
 }
 
 function renderEvidence(evidence) {
@@ -55,6 +68,17 @@ function renderEvidence(evidence) {
   byId("sources").textContent = "Sources · " + evidence.sources.join(", ");
   byId("query").textContent = evidence.sql;
   byId("parameters").textContent = "Parameters · " + JSON.stringify(evidence.parameters);
+  const chart = inspectChartRows(evidence.rows);
+  const chartPanel = byId("answer-chart");
+  chartPanel.hidden = !chart;
+  byId("answer-bars").replaceChildren();
+  if (chart) {
+    const measure = evidence.unit || chart.valueKey.replaceAll("_", " ");
+    byId("chart-caption").textContent = measure + " by " + chart.labelKey.replaceAll("_", " ");
+    byId("answer-bars").append(renderBarChart(chart));
+  } else {
+    chartPanel.open = false;
+  }
   const table = byId("evidence-rows");
   table.replaceChildren();
   if (!evidence.rows.length) {
@@ -77,9 +101,13 @@ function renderState(snapshot) {
   const original = state.original_question || originalDraft;
   byId("original").textContent = original;
   byId("original").hidden = fresh || !original;
-  byId("discovery").hidden = state.stage !== "discover";
+  const needsDetail = state.stage === "discover" && Boolean(state.discovery_clarification);
+  byId("discovery").hidden = state.stage !== "discover" || needsDetail;
+  byId("conversation-form").hidden = state.stage === "discover" && !needsDetail;
   if (!byId("discovery").hidden) {
-    byId("match-method").textContent = state.discovery_mode === "semantic" ? "Semantic match" : "Keyword fallback";
+    const methods = {semantic: "Semantic match", keyword_fallback: "Keyword fallback · language service unavailable",
+      invalid_ranking: "Dashboard ranking unavailable"};
+    byId("match-method").textContent = methods[state.discovery_mode] || "";
     renderMatches(state.dashboards);
   }
   byId("insight").hidden = !state.evidence;
@@ -89,9 +117,9 @@ function renderState(snapshot) {
   byId("suggestions").hidden = !fresh;
   byId("recent").hidden = fresh;
   byId("history").replaceChildren(...(state.history || []).map(q => element("li", q)));
-  byId("composer-label").textContent = fresh ? "Your question" : "Continue the conversation";
+  byId("composer-label").textContent = needsDetail ? state.discovery_clarification : (fresh ? "Your question" : "Continue the conversation");
   byId("message").placeholder = fresh ? "Ask about your offices, workforce or portfolio" : "Ask a follow-up or clarify your question";
-  byId("send").textContent = fresh ? "Find dashboards" : "Send follow-up";
+  byId("send").textContent = needsDetail ? "Answer Here" : (fresh ? "Find dashboards" : "Send follow-up");
 }
 
 async function readEvents(response) {
@@ -108,6 +136,10 @@ async function readEvents(response) {
       buffer = buffer.slice(boundary + 2);
       if (frame.startsWith("data:")) {
         const event = JSON.parse(frame.slice(5));
+        if (event.type === "CUSTOM" && event.name === "original_question_token") {
+          originalToken = event.value;
+          try { sessionStorage.setItem(tokenKey, originalToken); } catch { /* The current page still has the token. */ }
+        }
         if (event.type === "STEP_STARTED") {
           const labels = {discover_dashboards: "Finding dashboards…", select_sources: "Selecting data sources…",
             plan_query: "Planning the analysis…", query_sources: "Reading evidence…"};
@@ -123,10 +155,10 @@ async function readEvents(response) {
   if (!finished) throw new Error("The connection ended before this turn finished. Please retry.");
 }
 
-async function sendTurn(action, text = "", dashboard = "") {
+async function sendTurn(action, text = "", dashboard = "", clarification = "") {
   if (busy) return;
   busy = true;
-  const signature = JSON.stringify([threadId, action, text, dashboard]);
+  const signature = JSON.stringify([threadId, action, text, dashboard, clarification]);
   const runId = retry?.signature === signature ? retry.runId : crypto.randomUUID();
   const previousState = state;
   retry = {signature, runId};
@@ -137,9 +169,13 @@ async function sendTurn(action, text = "", dashboard = "") {
     const payload = {
       threadId, runId, state: action === "select" ? {selected: dashboard} : {}, tools: [], context: [],
       messages: text ? [{id: crypto.randomUUID(), role: "user", content: text}] : [],
-      forwardedProps: action === "followup" && state.needs_prior_question
-        ? {action, prior_question: pendingDraft} : {action},
+      forwardedProps: {action},
     };
+    if (originalToken && ((action === "answer_here" && !text) || action === "followup")) {
+      payload.forwardedProps.original_token = originalToken;
+    }
+    if (clarification) payload.forwardedProps.clarification = clarification;
+    if (action === "followup" && state.needs_prior_question) payload.forwardedProps.prior_question = pendingDraft;
     const response = await fetch("/ag-ui", {method: "POST",
       headers: {"Content-Type": "application/json", Accept: "text/event-stream"}, body: JSON.stringify(payload)});
     if (!response.ok) throw new Error("The server could not accept this turn.");
@@ -164,16 +200,24 @@ byId("conversation-form").addEventListener("submit", event => {
   const text = byId("message").value.trim();
   if (!text || busy) return;
   if (state.stage === "new") {
+    originalToken = "";
+    sessionStorage.removeItem(tokenKey);
     originalDraft = text;
     sendTurn("discover", text);
+  } else if (state.stage === "discover") {
+    if (state.discovery_clarification) sendTurn("answer_here", originalDraft || state.original_question, "", text);
+    else sendTurn("answer_here", text);
   } else {
     sendTurn("followup", text);
   }
 });
 byId("answer-here").addEventListener("click", () => {
   const original = originalDraft || state.original_question || byId("message").value.trim();
-  if (state.needs_original && !original) {
+  if (state.needs_original && !original && !originalToken) {
     byId("run-status").textContent = "Re-enter the original question, then choose Answer Here.";
+    byId("conversation-form").hidden = false;
+    byId("composer-label").textContent = "Original question";
+    byId("send").textContent = "Answer Here";
     byId("message").focus();
     return;
   }
@@ -183,6 +227,8 @@ byId("new-thread").addEventListener("click", () => {
   threadId = crypto.randomUUID();
   sessionStorage.setItem(threadKey, threadId);
   originalDraft = "";
+  originalToken = "";
+  sessionStorage.removeItem(tokenKey);
   pendingDraft = "";
   retry = null;
   byId("message").value = "";

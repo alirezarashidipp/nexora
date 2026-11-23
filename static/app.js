@@ -126,15 +126,6 @@ function setStatus(status) {
   resultStatus.textContent = labels[status] || "Processing";
 }
 
-function chartElement(tag, className, text) {
-  const element = document.createElement(tag);
-  element.className = className;
-  if (text !== undefined) {
-    element.textContent = text;
-  }
-  return element;
-}
-
 function resetChart() {
   chartData = null;
   chartActions.hidden = true;
@@ -157,25 +148,6 @@ function offerCharts(dataRows) {
   });
   chartActions.hidden = false;
   renderChart("bar");
-}
-
-function renderBarChart() {
-  const chart = chartElement("div", "bar-chart");
-  const maximum = Math.max(...chartData.items.map((item) => item.value));
-
-  chartData.items.forEach((item) => {
-    const row = chartElement("div", "bar-row");
-    const label = chartElement("span", "bar-label", item.label);
-    const track = chartElement("span", "bar-track");
-    const fill = chartElement("span", "bar-fill");
-    const value = chartElement("strong", "bar-value", numberFormat.format(item.value));
-    fill.style.width = `${(item.value / maximum) * 100}%`;
-    track.append(fill);
-    row.append(label, track, value);
-    chart.append(row);
-  });
-
-  return chart;
 }
 
 function renderPieChart() {
@@ -222,7 +194,7 @@ function renderChart(type) {
   }
 
   chartTitle.textContent = `${type === "bar" ? "Bar" : "Pie"} chart · ${chartData.valueKey} by ${chartData.labelKey}`;
-  chartOutput.replaceChildren(type === "bar" ? renderBarChart() : renderPieChart());
+  chartOutput.replaceChildren(type === "bar" ? renderBarChart(chartData) : renderPieChart());
   chartPanel.hidden = false;
   chartButtons.forEach((button) => {
     button.setAttribute("aria-pressed", String(button.dataset.chart === type));

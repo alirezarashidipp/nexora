@@ -7,10 +7,15 @@ The Python `ag-ui-langgraph` adapter runs the same compiled LangGraph graph that
 `InMemorySaver`. The `ag-ui-protocol` event encoder streams the adapter's run, node
 and shared-state events over SSE. The browser shows progress as nodes run.
 
-1. **Discover dashboards.** The model receives the question and a compact list of dashboard IDs,
-   titles, descriptions, keywords and KPI labels. The application validates the ranking. An
-   unavailable provider or invalid output uses deterministic keyword ranking. A valid empty
-   ranking is a meaningful outcome.
+1. **Discover dashboards.** The model sees all ten published entries with their IDs, titles,
+   descriptions, keywords, KPI labels and views, plus the portfolio's office locations.
+   The catalogue is available in memory. Discovery never opens SQLite. The model ranks by
+   intent and identifies a supporting KPI, exact or partial coverage and the reason.
+   Nexora keeps the first three distinct entries that pass validation, in model order.
+   An unavailable language service enables keyword fallback. A malformed ranking, refusal
+   or rejected request produces a separate status. A valid empty ranking stays empty.
+   For an ambiguous question the model can ask for one missing detail. The user supplies
+   that detail when choosing Answer Here.
 2. **Select sources.** Answer Here restores the original wording. The model sees table topics,
    approved relationship names and business context to choose a base and an ordered join path.
    A dashboard recommendation can guide the choice. A question with no recommendation can
@@ -22,7 +27,8 @@ and shared-state events over SSE. The browser shows progress as nodes run.
 4. **Read evidence.** The application builds a bound SELECT for either a defined business
    metric or custom columns, aggregates, filters and sorting. A snapshot carries the answer,
    SQL, bindings and SQLite rows to the browser. Restoring a completed answer reruns its
-   validated plan on the immutable fixtures.
+   validated plan on the immutable fixtures. The browser can display a bar chart when
+   the actual rows contain suitable labels and values.
 
 Only the selected dashboard is writable client state, on the select action and after
 validation against that thread's recommendations. The graph's request context holds

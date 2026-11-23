@@ -13,15 +13,25 @@
 #message { width: 100%; margin: 8px 0; padding: 12px; font: inherit; font-size: 17px; border: 1px solid var(--color-rule-strong); border-radius: 5px; resize: vertical; }
 #original { font-size: 20px; font-weight: 600; border-left: 3px solid var(--color-accent); padding-left: 12px; margin-bottom: 22px; overflow-wrap: anywhere; }
 #insight, #discovery { margin-bottom: 24px; }
-#matches label { display: grid; grid-template-columns: auto 1fr; gap: 0 10px; align-items: baseline; padding: 10px 0; cursor: pointer; }
+#match-method { margin: -6px 0 14px; color: var(--color-ink-soft); font-size: 14px; }
+#matches { display: grid; gap: 8px; }
+.dashboard-match { padding: 12px 16px; border: 1px solid var(--color-rule); border-radius: 6px; }
+.dashboard-match:has(input:checked) { border-color: var(--color-accent); }
+#matches label { display: grid; grid-template-columns: auto 1fr auto; gap: 10px; align-items: center; cursor: pointer; }
 #matches input { accent-color: var(--color-accent); }
-#matches small, #matches a { grid-column: 2; }
-#matches a { text-decoration: underline; }
+.dashboard-match p { margin: 5px 0 8px 24px; }
+.dashboard-match :is(small, a) { margin-left: 24px; }
+.coverage { color: var(--color-ink-soft); font-size: 13px; font-weight: 600; }
+.coverage.exact { color: var(--color-accent); }
+#matches a { font-weight: 600; text-decoration: underline; }
 #matches, #definition { margin-bottom: 14px; }
 #insight-answer { font-size: 22px; font-weight: 600; white-space: pre-line; }
 #scope:not(:empty) { margin: 4px 0; color: var(--color-ink-soft); font-weight: 600; }
 #definition, #sources, #parameters, #matches small { color: var(--color-muted); }
-#evidence summary { cursor: pointer; font-weight: 600; }
+#evidence summary, #answer-chart summary { cursor: pointer; font-weight: 600; }
+#answer-chart { margin-bottom: 12px; }
+#answer-chart figure { margin: 10px 0; padding: 14px; background: var(--color-surface-muted); }
+#chart-caption { margin-bottom: 10px; font-weight: 600; }
 #evidence p { margin: 8px 0; }
 #query { white-space: pre-wrap; background: var(--color-surface-muted); padding: 14px; font: 13px/1.6 var(--font-mono); }
 #evidence-rows { width: 100%; border-collapse: collapse; }

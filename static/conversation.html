@@ -6,6 +6,7 @@
   <link rel="icon" href="/static/image/HSBC_logo_(2018)%20(1).svg">
   <link rel="stylesheet" href="/static/style.css?v=15">
   <link rel="stylesheet" href="/static/conversation.css">
+  <script defer src="/static/chart.js"></script>
   <script defer src="/static/conversation.js"></script>
 </head>
 <body>
@@ -25,6 +26,9 @@
         </section>
         <section id="insight" hidden>
           <h2 id="insight-title">Answer</h2><p id="insight-answer"></p><p id="scope"></p><p id="definition"></p>
+          <details id="answer-chart" hidden><summary>View chart</summary><figure>
+            <figcaption id="chart-caption"></figcaption><div id="answer-bars"></div>
+          </figure></details>
           <details id="evidence"><summary>SQL and evidence</summary>
             <p id="sources"></p><pre id="query"></pre><p id="parameters"></p><table id="evidence-rows"></table>
           </details>

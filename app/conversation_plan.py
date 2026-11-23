@@ -1,16 +1,38 @@
 """Choose a dashboard from metadata, then plan an analysis when the user asks."""
 
+from typing import Literal
+
 from .catalogue import CITIES, DASHBOARDS, JOINS, find_dashboards, schema_context
 from .demo_queries import Plan, dimensions, needed_joins
 from .field_queries import FieldPlan, Record, scope_tables
-from .llm_connection import LLMConfigurationError, LLMConnectionError, create_completion, llm_connection
+from .llm_connection import LLMConfigurationError, LLMConnectionError, LLMRequestRejectedError, create_completion, llm_connection
 from .prompts import load_prompt
 from .schema import DEMO_COLUMNS
 from .workflow import parse_output
 
 
+class DashboardMatch(Record):
+    dashboard_id: str
+    coverage: Literal["exact", "related"]
+    kpi: str
+    gap: Literal["none", "measure", "breakdown", "period", "scope", "calculation", "cause", "forecast"]
+    reason: str
+
+
 class Matches(Record):
-    dashboard_ids: list[str]
+    matches: list[DashboardMatch]
+    clarification: str | None
+
+
+GAPS = {
+    "measure": "The requested measure is outside this view.",
+    "breakdown": "The requested breakdown is outside this view.",
+    "period": "Coverage of the requested period is unconfirmed.",
+    "scope": "Coverage of the requested population or filter is unconfirmed.",
+    "calculation": "The requested comparison or calculation needs a separate analysis.",
+    "cause": "Explaining the cause requires investigation.",
+    "forecast": "The requested forecast requires further analysis.",
+}
 
 
 class Scope(Record):
@@ -43,28 +65,61 @@ def ask_model(prompt, payload, result_type):
         with llm_connection() as (client, model):
             response = create_completion(client, model, load_prompt(prompt), payload,
                                          json_schema=result_type.model_json_schema())
+    except LLMRequestRejectedError:
+        raise
     except (LLMConfigurationError, LLMConnectionError):
         raise LLMConnectionError("The language service is unavailable.") from None
     return parse_output(response, result_type)
 
 
-def discover(question: str, dashboards: list[dict]) -> tuple[list[str], str]:
-    keys = ("dashboard_id", "title", "description", "keywords", "kpi_tags")
+def discover(question: str, dashboards: list[dict]) -> tuple[list[dict], str, str]:
+    keys = ("dashboard_id", "title", "description", "keywords", "kpi_tags", "views")
     compact = [{key: item[key] for key in keys} for item in dashboards]
-    known = {item["dashboard_id"] for item in compact}
+    catalogue = {item["dashboard_id"]: item for item in compact}
+    request = {"question": question, "catalogue": compact, "office_locations": list(CITIES)}
     try:
-        result = ask_model("dashboard_discovery", {"question": question, "catalogue": compact}, Matches)
-        ids = result.dashboard_ids
-        if len(ids) > 3 or len(set(ids)) != len(ids) or not set(ids) <= known:
-            raise ValueError("Invalid dashboard ranking.")
-        return ids, "semantic"
-    except (ValueError, LLMConnectionError):
-        return find_dashboards(question, dashboards), "keyword_fallback"
+        ranking = ask_model("dashboard_discovery", request, Matches)
+    except (ValueError, LLMRequestRejectedError):
+        return [], "invalid_ranking", ""
+    except LLMConnectionError:
+        matches = []
+        for key in find_dashboards(question, dashboards):
+            matches.append(dict(dashboard_id=key, coverage="related", reason=catalogue[key]["description"]))
+        return matches, "keyword_fallback", ""
+
+    if ranking.clarification is not None:
+        clarification = " ".join(ranking.clarification.split())
+        if ranking.matches or not 1 <= len(clarification) <= 200:
+            return [], "invalid_ranking", ""
+        return [], "semantic", clarification
+
+    matches = []
+    seen = set()
+    for match in ranking.matches:
+        key = match.dashboard_id
+        card = catalogue.get(key)
+        if not card or key in seen or match.kpi not in card["kpi_tags"]:
+            continue
+        if (match.coverage == "exact") != (match.gap == "none"):
+            continue
+        reason = " ".join(match.reason.split())
+        if not 1 <= len(reason) <= 240:
+            continue
+        seen.add(key)
+        basis = f"Shows {match.kpi.lower()} by {', '.join(card['views'])}."
+        matches.append(dict(dashboard_id=key, coverage=match.coverage, reason=reason,
+                            basis=basis, limitation=GAPS.get(match.gap, "")))
+        if len(matches) == 3:
+            break
+    if ranking.matches and not matches:
+        return [], "invalid_ranking", ""
+    return matches, "semantic", ""
 
 
 def context_for_question(question, selected, memory):
     return {"question": question, "selected_dashboard": selected or None,
             "original_question": memory.get("original_question", ""),
+            "discovery_clarification": memory.get("discovery_prompt", ""), "clarified_detail": memory.get("discovery_detail", ""),
             "pending_question": memory.get("pending", ""), "last_clarification": memory.get("notice", ""),
             "recent_questions": memory.get("history", []), "previous_plan": memory.get("plan", {}),
             "recent_analyses": memory.get("analyses", []), "known_sources": memory.get("known_sources", [])}

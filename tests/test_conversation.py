@@ -26,6 +26,13 @@ from app.schema import DEMO_COLUMNS
 from build_demo_data import build_databases
 
 
+def model_match(key, coverage="exact", gap="none", reason=None):
+    report = DASHBOARDS[key]
+    kpi = next(iter(report.measures.values())).label
+    return dict(dashboard_id=key, coverage=coverage, kpi=kpi, gap=gap,
+                reason=reason or report.description)
+
+
 class FixturesTest(unittest.TestCase):
     def test_six_agreed_sites_across_all_five_databases(self):
         expected = {"London": ("LON", "GB", "Europe/London", "ENG"),
@@ -138,9 +145,14 @@ class FixturesTest(unittest.TestCase):
                 self.assertEqual(result["workforce"]["url_status"], "configured")
                 self.assertEqual(result["workforce"]["dashboard_url"], "https://example.org/custom")
                 self.assertEqual(result["estate"]["url_status"], "placeholder")
-                config.write_text(json.dumps({"workforce": "file:///unknown"}))
-                with self.assertRaises(ValueError):
-                    read_dashboards()
+                self.assertIsNone(result["estate"]["dashboard_url"])
+                config.write_text(json.dumps({"workforce": "file:///unknown", "estate": "https://example.org/estate"}))
+                cards = {r["dashboard_id"]: r for r in read_dashboards()}
+                self.assertEqual(cards["workforce"]["url_status"], "unavailable")
+                self.assertIsNone(cards["workforce"]["dashboard_url"])
+                self.assertEqual(cards["estate"]["dashboard_url"], "https://example.org/estate")
+                config.write_text("unreadable URL mapping")
+                self.assertTrue(all(r["url_status"] == "unavailable" for r in read_dashboards()))
 
 
 class ConversationTest(unittest.TestCase):
@@ -167,6 +179,8 @@ class ConversationTest(unittest.TestCase):
         reply = self.replies.pop(0)
         if callable(reply):
             reply = reply()
+        if isinstance(reply, httpx.Response):
+            return reply
         return httpx.Response(200, json={"id": "test", "model": "offline-test", "created": 0,
             "object": "chat.completion", "choices": [{"index": 0, "finish_reason": "stop",
             "message": {"role": "assistant", "content": json.dumps(reply)}}]})
@@ -174,11 +188,13 @@ class ConversationTest(unittest.TestCase):
     def tearDown(self):
         self.assertEqual(self.replies, [], "Expected provider request did not run")
 
-    def events(self, action, question="", thread=None, run=None, dashboard="", state=None, prior_question=""):
+    def events(self, action, question="", thread=None, run=None, dashboard="", state=None,
+               prior_question="", original_token="", clarification=""):
         payload = {"threadId": thread or self.thread, "runId": run or str(uuid4()),
                    "messages": [{"id": "q", "role": "user", "content": question}] if question else [],
                    "state": state or {}, "forwardedProps": {"action": action, "dashboard": dashboard,
-                                                          "prior_question": prior_question}}
+                                                          "prior_question": prior_question, "original_token": original_token,
+                                                          "clarification": clarification}}
         response = self.client.post("/ag-ui", json=payload)
         self.assertEqual(response.status_code, 200, response.text)
         self.assertIn("text/event-stream", response.headers["content-type"])
@@ -208,24 +224,37 @@ class ConversationTest(unittest.TestCase):
 
     def test_discovery_reads_only_metadata_then_answer_and_compare(self):
         first = "How many active employees are in Dubai?"
-        self.replies.append({"dashboard_ids": ["workforce", "hiring"]})
-        with patch("app.catalogue.table_definition", side_effect=AssertionError), \
-             patch("app.demo_queries.read_evidence", side_effect=AssertionError):
-            discovery = self.turn("discover", first)
+        discovery_run = str(uuid4())
+        reason = "Shows active employees by home office."
+        self.replies.append({"clarification": None, "matches": [model_match("workforce", reason=reason),
+                                        model_match("hiring", "related", "measure", "Shows open hiring capacity by hiring office.")]})
+        with patch("sqlite3.connect", side_effect=AssertionError("Discovery opened SQLite")), \
+             patch("app.catalogue.table_definition", side_effect=AssertionError), \
+             patch("app.conversation_plan.find_dashboards", side_effect=AssertionError("Semantic rank reached keyword search")):
+            discovery = self.turn("discover", first, run=discovery_run)
             self.assertEqual(discovery["discovery_mode"], "semantic")
             self.assertEqual([d["dashboard_id"] for d in discovery["dashboards"]], ["workforce", "hiring"])
+            self.assertEqual([d["coverage"] for d in discovery["dashboards"]], ["exact", "related"])
+            self.assertEqual(discovery["dashboards"][0]["reason"], reason)
             self.assertEqual(self.turn("select", state={"selected": "workforce"})["selected"], "workforce")
+            self.assertEqual(self.turn("restore")["dashboards"], discovery["dashboards"])
         sent = self.requests[0][1]
-        self.assertEqual(set(sent), {"question", "catalogue"})
+        self.assertEqual(set(sent), {"question", "catalogue", "office_locations"})
         self.assertEqual(len(sent["catalogue"]), 10)
         for entry in sent["catalogue"]:
-            self.assertEqual(set(entry), {"dashboard_id", "title", "description", "keywords", "kpi_tags"})
+            self.assertEqual(set(entry), {"dashboard_id", "title", "description", "keywords", "kpi_tags", "views"})
         self.scope("workforce.employees", "employee_office")
         self.metric("employees", ["Dubai"])
         result = self.turn("answer_here", "Other question", state={"selected": "hiring", "plan": {}})
         self.assertEqual(self.requests[-1][1]["question"], first)
         self.assertEqual(self.requests[-1][1]["selected_dashboard"], "workforce")
         self.assertEqual(result["evidence"]["rows"], [{"value": 2}])
+        with patch("sqlite3.connect", side_effect=AssertionError("Replayed discovery touched SQLite")):
+            replay = self.turn("discover", first, run=discovery_run)
+        self.assertEqual(replay["stage"], "discover")
+        self.assertEqual(replay["dashboards"], discovery["dashboards"])
+        self.assertIsNone(replay["evidence"])
+        self.assertEqual(replay["sources"], [])
         self.scope("workforce.employees", "employee_office")
         self.metric("employees", ["Dubai", "London"], "city")
         run = str(uuid4())
@@ -243,29 +272,60 @@ class ConversationTest(unittest.TestCase):
                                 ("Where do we keep burning through power?", "cost")):
             with self.subTest(question=question):
                 self.assertEqual(find_dashboards(question, catalog), [])
-                self.replies.append({"dashboard_ids": [match]})
+                self.replies.append({"clarification": None, "matches": [model_match(match)]})
                 view = self.turn("discover", question, thread=str(uuid4()))
                 self.assertEqual(view["discovery_mode"], "semantic")
                 self.assertEqual([d["dashboard_id"] for d in view["dashboards"]], [match])
                 self.assertEqual(self.requests[-1][0], load_prompt("dashboard_discovery"))
 
-    def test_discovery_fallback_and_valid_semantic_no_match(self):
+    def test_validated_recommendations_keep_model_order_and_cap_at_three(self):
+        private = "Contact person@example.org for a full cost breakdown."
+        first = model_match("cost", "related", "calculation", private)
+        self.replies.append({"clarification": None, "matches": [
+            {**model_match("estate"), "dashboard_id": "unknown"}, first, first,
+            {**model_match("occupancy"), "kpi": "unpublished KPI"},
+            model_match("schedule", "exact", "forecast"),
+            model_match("visits"), model_match("estate"), model_match("workforce"),
+        ]})
+        with patch("sqlite3.connect", side_effect=AssertionError), \
+             patch("app.conversation_plan.find_dashboards", side_effect=AssertionError):
+            view = self.turn("discover", "Help me understand the cost of using our buildings.")
+        self.assertEqual(view["discovery_mode"], "semantic")
+        self.assertEqual([c["dashboard_id"] for c in view["dashboards"]], ["cost", "visits", "estate"])
+        reason = view["dashboards"][0]["reason"]
+        self.assertIn("energy use", reason)
+        self.assertIn("separate analysis", reason)
+        self.assertNotIn("person@", json.dumps(view))
+        self.assertNotIn("person@", str(conversation.saver.get_tuple({"configurable": {"thread_id": self.thread}}).checkpoint))
+        error = self.events("select", state={"selected": "unknown"})[-1]
+        self.assertEqual(error["type"], "RUN_ERROR")
+
+    def test_only_an_unavailable_provider_can_trigger_keyword_matching(self):
         question = "What was the energy cost in Manchester?"
         expected = find_dashboards(question, read_dashboards())
-        for reply in ({"dashboard_ids": ["invented"]}, {"invalid": True}):
-            self.replies.append(reply)
+        invalid = {**model_match("cost"), "dashboard_id": "invented"}
+        refusal = httpx.Response(200, json={"choices": [{"finish_reason": "stop",
+            "message": {"role": "assistant", "content": None, "refusal": "refused"}}]})
+        with patch("app.conversation_plan.find_dashboards", side_effect=AssertionError("Unexpected keyword fallback")):
+            for reply in ({"clarification": None, "matches": [invalid]}, {"invalid": True}, refusal, httpx.Response(200, text="invalid"),
+                          httpx.Response(400, json={"error": {"message": "rejected"}})):
+                self.replies.append(reply)
+                view = self.turn("discover", question, thread=str(uuid4()))
+                self.assertEqual(view["discovery_mode"], "invalid_ranking")
+                self.assertEqual(view["dashboards"], [])
+            self.replies.append({"clarification": None, "matches": []})
             view = self.turn("discover", question, thread=str(uuid4()))
-            self.assertEqual(view["discovery_mode"], "keyword_fallback")
-            self.assertEqual([d["dashboard_id"] for d in view["dashboards"]], expected)
+            self.assertEqual((view["discovery_mode"], view["dashboards"]), ("semantic", []))
         with patch("app.conversation_plan.llm_connection", side_effect=LLMConfigurationError("Offline")):
             view = self.turn("discover", question)
             self.assertEqual(view["discovery_mode"], "keyword_fallback")
+            self.assertEqual([d["dashboard_id"] for d in view["dashboards"]], expected)
+            self.assertTrue(all(d["coverage"] == "related" and d["reason"] for d in view["dashboards"]))
             error = self.events("answer_here")[-1]
             self.assertEqual((error["type"], error["code"]), ("RUN_ERROR", "provider"))
             self.assertEqual(self.turn("restore"), view)
-        self.replies.append({"dashboard_ids": []})
-        view = self.turn("discover", question, thread=str(uuid4()))
-        self.assertEqual((view["discovery_mode"], view["dashboards"]), ("semantic", []))
+        self.replies.append(httpx.Response(503, json={"error": {"message": "temporarily unavailable"}}))
+        self.assertEqual(self.turn("discover", question, thread=str(uuid4()))["discovery_mode"], "keyword_fallback")
 
     def test_every_suggested_question_uses_the_real_planner(self):
         cases = (("workforce", "employees", "Dubai"), ("cost", "energy_cost", "Manchester"),
@@ -274,7 +334,7 @@ class ConversationTest(unittest.TestCase):
         self.assertEqual(len(examples), len(cases))
         for question, (report, metric, city) in zip(examples, cases):
             thread = str(uuid4())
-            self.replies.append({"dashboard_ids": [report]})
+            self.replies.append({"clarification": None, "matches": [model_match(report)]})
             self.scope(DASHBOARDS[report].table, *DASHBOARDS[report].joins)
             self.metric(metric, [city])
             self.turn("discover", question, thread=thread)
@@ -287,7 +347,7 @@ class ConversationTest(unittest.TestCase):
 
     def test_unseen_ranked_question_outside_dashboard_metrics(self):
         question = "Rank the three biggest workplaces by indoor area."
-        self.replies.append({"dashboard_ids": []})
+        self.replies.append({"clarification": None, "matches": []})
         self.assertFalse(self.turn("discover", question)["dashboards"])
         self.scope("locations.offices")
         self.fields([("offices.office_name", "field"), ("offices.floor_area_sqm", "field")],
@@ -304,7 +364,7 @@ class ConversationTest(unittest.TestCase):
 
     def test_progressive_schema_and_followup_filters(self):
         first = "What was attendance in Mumbai from 2026-11-17?"
-        self.replies.append({"dashboard_ids": ["occupancy"]})
+        self.replies.append({"clarification": None, "matches": [model_match("occupancy")]})
         self.turn("discover", first)
         self.scope("facilities.office_daily_metrics", "metrics_office")
         self.metric("attendance", ["Mumbai"], start="2026-11-17")
@@ -323,7 +383,7 @@ class ConversationTest(unittest.TestCase):
 
     def test_unseen_weather_question_and_contextual_custom_comparison(self):
         first = "How warm was Shanghai on average?"
-        self.replies.append({"dashboard_ids": []})
+        self.replies.append({"clarification": None, "matches": []})
         self.turn("discover", first)
         self.scope("external.weather_daily")
         self.fields([("weather_daily.temp_c", "avg")], [("weather_daily.city_code", "=", ["SHA"])])
@@ -344,7 +404,7 @@ class ConversationTest(unittest.TestCase):
 
     def test_private_wording_and_failed_run_rollback(self):
         question = "What was the energy cost in Dubai for person@example.org?"
-        self.replies.append({"dashboard_ids": ["cost"]})
+        self.replies.append({"clarification": None, "matches": [model_match("cost")]})
         state = self.turn("discover", question)
         self.assertTrue(state["needs_original"])
         self.assertNotIn("person@", json.dumps(state))
@@ -359,9 +419,50 @@ class ConversationTest(unittest.TestCase):
         for word in ("person@", "SELECT ", "dashboard_url", "possible_values"):
             self.assertNotIn(word, str(saved[0].checkpoint))
 
+    def test_original_can_be_used_after_reload_without_resending_the_text(self):
+        wording = "How warm was it beside the Shanghai symposium?"
+        self.replies.append({"clarification": None, "matches": []})
+        events = self.events("discover", wording)
+        receipt = next(e["value"] for e in events if e.get("name") == "original_question_token")
+        self.assertNotIn("symposium", json.dumps(events))
+        self.assertTrue(self.turn("restore")["needs_original"])
+        self.assertEqual(self.events("answer_here", original_token="invalid")[-1]["code"], "question")
+        other = str(uuid4())
+        self.replies.append({"clarification": None, "matches": []})
+        self.turn("discover", wording, thread=other)
+        self.assertEqual(self.events("answer_here", thread=other, original_token=receipt)[-1]["code"], "question")
+        self.scope("external.weather_daily")
+        self.fields([("weather_daily.temp_c", "avg")], [("weather_daily.city_code", "=", ["SHA"])])
+        answer = self.turn("answer_here", original_token=receipt)
+        self.assertEqual(self.requests[-1][1]["question"], wording)
+        self.assertEqual(answer["evidence"]["rows"], [{"avg_temp_c": 14.5}])
+        saved = conversation.saver.get_tuple({"configurable": {"thread_id": self.thread}})
+        self.assertNotIn(receipt, str(saved.checkpoint))
+        self.assertNotIn("symposium", str(saved.checkpoint))
+
+    def test_missing_dataset_still_allows_discovery_and_a_retry(self):
+        first = "What is the average temperature in Shanghai?"
+        self.replies.append({"clarification": None, "matches": [model_match("weather", "related", "measure")]})
+        with tempfile.TemporaryDirectory() as tmp, patch("app.catalogue.DEMO_DIR", Path(tmp)):
+            discovery = self.turn("discover", first)
+            with patch("app.conversation.choose_sources", side_effect=AssertionError):
+                self.assertEqual(self.events("followup", "Start now")[-1]["code"], "question")
+            self.scope("external.weather_daily")
+            failure = self.events("answer_here", first)[-1]
+            self.assertEqual(failure["code"], "dataset")
+            self.assertIn("external", failure["message"])
+            self.assertEqual(self.turn("restore"), discovery)
+            with closing(sqlite3.connect(Path(tmp) / "external.db")):
+                pass
+            self.scope("external.weather_daily")
+            self.assertEqual(self.events("answer_here", first)[-1]["code"], "dataset")
+        self.scope("external.weather_daily")
+        self.fields([("weather_daily.temp_c", "avg")], [("weather_daily.city_code", "=", ["SHA"])])
+        self.assertEqual(self.turn("answer_here", first)["evidence"]["rows"], [{"avg_temp_c": 14.5}])
+
     def test_clarifying_a_paraphrase_recovers_the_verified_question(self):
         wording = "How warm was the branch where we hosted the symposium?"
-        self.replies.append({"dashboard_ids": []})
+        self.replies.append({"clarification": None, "matches": []})
         self.turn("discover", wording)
         self.replies.append(dict(base=None, joins=[], clarification="Which city should I use?"))
         view = self.turn("answer_here", wording)
@@ -375,14 +476,14 @@ class ConversationTest(unittest.TestCase):
         self.assertNotIn("symposium", str(saved.checkpoint))
 
     def test_client_state_cannot_choose_an_unrecommended_dashboard(self):
-        self.replies.append({"dashboard_ids": ["estate"]})
+        self.replies.append({"clarification": None, "matches": [model_match("estate")]})
         original = self.turn("discover", "Show offices")
         error = self.events("select", state={"selected": "hiring", "stage": "answer"})[-1]
         self.assertEqual(error["type"], "RUN_ERROR")
         self.assertEqual(self.turn("restore"), original)
 
     def test_unknown_subject_clarifies_without_touching_sources(self):
-        self.replies.extend([{"dashboard_ids": []}, dict(base=None, joins=[], clarification="Which measure should I use?")])
+        self.replies.extend([{"clarification": None, "matches": []}, dict(base=None, joins=[], clarification="Which measure should I use?")])
         with patch("app.catalogue.table_definition", side_effect=AssertionError), \
              patch("app.conversation.execute_plan", side_effect=AssertionError):
             self.turn("discover", "How many?")
@@ -391,8 +492,27 @@ class ConversationTest(unittest.TestCase):
         self.assertEqual(view["notice"], "Which measure should I use?")
         self.assertIsNone(view["evidence"])
 
+    def test_discovery_clarification_keeps_the_original_question_for_answer_here(self):
+        first = "How are we doing?"
+        prompt = "Which measure and office should I use?"
+        self.replies.append({"matches": [], "clarification": prompt})
+        with patch("sqlite3.connect", side_effect=AssertionError("Discovery touched a database")):
+            view = self.turn("discover", first)
+            self.assertEqual(view["discovery_clarification"], prompt)
+            self.assertEqual(view["dashboards"], [])
+            self.assertEqual(self.turn("restore")["discovery_clarification"], prompt)
+        detail = "Active employees in London"
+        self.scope("workforce.employees", "employee_office")
+        self.metric("employees", ["London"])
+        answer = self.turn("answer_here", first, clarification=detail)
+        for _, payload in self.requests[-2:]:
+            self.assertEqual(payload["question"], first)
+            self.assertEqual(payload["clarified_detail"], detail)
+        self.assertEqual(answer["evidence"]["rows"], [{"value": 2}])
+        self.assertIn(detail, answer["history"])
+
     def test_unapproved_source_path_and_out_of_scope_field_clarify(self):
-        self.replies.append({"dashboard_ids": ["estate"]})
+        self.replies.append({"clarification": None, "matches": [model_match("estate")]})
         self.turn("discover", "Show offices")
         self.scope("locations.offices", "office_weather")
         with patch("app.catalogue.table_definition", side_effect=AssertionError):
@@ -404,7 +524,7 @@ class ConversationTest(unittest.TestCase):
 
     def test_unrecognised_private_filter_never_enters_memory_or_sql(self):
         first = "List offices"
-        self.replies.append({"dashboard_ids": ["estate"]})
+        self.replies.append({"clarification": None, "matches": [model_match("estate")]})
         self.turn("discover", first)
         self.scope("locations.offices")
         self.fields([("offices.office_name", "field")], [("offices.office_name", "=", ["person@example.org"])])
@@ -418,7 +538,7 @@ class ConversationTest(unittest.TestCase):
     def test_bounded_checkpoints_history_and_eviction(self):
         first = "How many active employees are in Dubai?"
         with patch.object(conversation, "MAX_THREADS", 2), patch.object(conversation, "threads", type(conversation.threads)()):
-            self.replies.append({"dashboard_ids": ["workforce"]})
+            self.replies.append({"clarification": None, "matches": [model_match("workforce")]})
             self.turn("discover", first)
             for index in range(9):
                 self.scope("workforce.employees", "employee_office")
@@ -431,7 +551,7 @@ class ConversationTest(unittest.TestCase):
             self.assertEqual(len(values["analyses"]), conversation.HISTORY_SIZE)
             self.assertFalse({"sql", "rows", "schema", "evidence"} & values.keys())
             for _ in range(2):
-                self.replies.append({"dashboard_ids": ["workforce"]})
+                self.replies.append({"clarification": None, "matches": [model_match("workforce")]})
                 self.turn("discover", first, thread=str(uuid4()))
             self.assertEqual(self.turn("restore")["stage"], "new")
             self.assertEqual(self.events("answer_here")[-1]["type"], "RUN_ERROR")
@@ -442,7 +562,7 @@ class ConversationTest(unittest.TestCase):
             entered.set()
             if not release.wait(8):
                 raise AssertionError("No step was delivered while discovery was in progress")
-            return {"dashboard_ids": ["workforce"]}
+            return {"clarification": None, "matches": [model_match("workforce")]}
         self.replies.append(delayed_match)
         with socket.socket() as listener:
             listener.bind(("127.0.0.1", 0))

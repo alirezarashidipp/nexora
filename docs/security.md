@@ -25,8 +25,12 @@ independent SQL and SQLite controls.
 
 ## Conversation workspace
 
-Discovery sends only the question, dashboard IDs, titles, descriptions, KPI labels
-and keywords to the provider. It validates every returned ID against the catalogue.
+Discovery sends the question and public business metadata to the provider, including
+published KPIs, views and office coverage. It never reads a SQLite file or sends SQL,
+source definitions, result rows or destination URLs. It verifies each dashboard ID and
+supporting KPI against the catalogue and checks that the coverage classification agrees
+with the stated gap. Only bounded business-safe reasons enter memory. For private
+wording the server describes the model-selected KPI and gap using catalogue terms.
 For analysis the server validates the selected base table and every step of a reviewed
 many-to-one join path before loading its schemas. Both keys are required for the
 city-and-date weather join.
@@ -40,13 +44,17 @@ authorizer checks database, table, column and allowed functions. The legacy fixe
 validator and authorizer continue to guard the employee path.
 
 Only short questions consisting of the public demo vocabulary and calendar dates
-are retained verbatim. Other original wording stays in the current browser page
-until Answer Here, which verifies it against a keyed fingerprint. After a reload
-the user may need to re-enter that wording. While a clarification is open, the page
+are retained verbatim. Other original wording stays out of checkpoints. The server
+encrypts it with a process-local Fernet key and binds it to the thread. Tab session
+storage holds the opaque token, which lets Answer Here recover the exact wording
+after a reload. The server verifies the thread and a keyed fingerprint. A new
+conversation clears the tab's token. Restarting the process clears its encryption
+key and the checkpointer. While a clarification is open, the page
 can echo its prior question on the next turn. The server accepts it only if its
 keyed fingerprint matches that thread's pending question. The graph stores bounded business
-context. Raw rows, SQL, schemas, provider output and unrestricted free text stay
-outside checkpoints. General phrasing is processed by the configured provider.
+context. Raw rows, SQL, schemas, unvalidated provider replies and unrestricted free
+text stay outside checkpoints. General phrasing is processed by the configured provider.
+The tab token uses [Fernet authenticated encryption](https://cryptography.io/en/latest/fernet/).
 
 Thread UUIDs identify conversations. They do not authenticate users. Serve this
 single-process demo on localhost with synthetic data.

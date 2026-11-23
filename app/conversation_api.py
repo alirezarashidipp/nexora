@@ -4,7 +4,7 @@ from contextlib import aclosing
 from typing import Literal
 from uuid import UUID
 
-from ag_ui.core import EventType, RunAgentInput, RunErrorEvent
+from ag_ui.core import CustomEvent, EventType, RunAgentInput, RunErrorEvent
 from ag_ui.encoder import EventEncoder
 from ag_ui_langgraph import LangGraphAgent
 from fastapi import APIRouter, HTTPException
@@ -24,6 +24,8 @@ class TurnAction(BaseModel):
     action: Literal["discover", "select", "answer_here", "followup", "restore"]
     dashboard: str = ""
     prior_question: str = ""
+    original_token: str = ""
+    clarification: str = ""
 
 
 class ConversationAgent(LangGraphAgent):
@@ -42,7 +44,7 @@ class ConversationAgent(LangGraphAgent):
         return conversation.public_state(self.memory, self.turn)
 
 
-async def stream_turn(thread_id, run_id, action, question, dashboard, dashboards, prior_question):
+async def stream_turn(thread_id, run_id, intent, question, dashboard, dashboards):
     # The single-process demo serialises turns, including retries and checkpoint eviction.
     # A waiting request yields the event loop while the active SSE stream is running.
     while not conversation.turn_lock.acquire(blocking=False):
@@ -51,15 +53,18 @@ async def stream_turn(thread_id, run_id, action, question, dashboard, dashboards
     previous = None
     committed = False
     try:
+        action = intent.action
         previous = conversation.saver.get_tuple(config)
         memory = previous.checkpoint["channel_values"] if previous else {}
         runs = memory.get("runs", [])
+        replay_discovery = run_id in runs and action in ("discover", "select")
         if run_id in runs:
             action = "restore"
         elif action != "restore":
             runs = [*runs, run_id][-2 * conversation.HISTORY_SIZE:]
-        turn = dict(action=action, question=question, prior_question=prior_question,
-                    dashboard=dashboard, dashboards=dashboards, work={})
+        turn = dict(thread_id=thread_id, action=action, question=question, prior_question=intent.prior_question,
+                    original_token=intent.original_token, clarification=intent.clarification.strip(),
+                    dashboard=dashboard, dashboards=dashboards, work={"replay_discovery": replay_discovery})
         # Only bounded trusted state enters the checkpointer. The user message, provider context
         # and SQL results travel in the LangGraph run context for the lifetime of this request.
         shared_state = {"runs": runs}
@@ -71,19 +76,25 @@ async def stream_turn(thread_id, run_id, action, question, dashboard, dashboards
             async for event in events:
                 if event.type == EventType.RUN_ERROR:
                     safe_messages = ("Start a new conversation", "This conversation has expired",
-                                     "Select a recommended dashboard", "Please enter the original question")
+                                     "Select a recommended dashboard", "Please enter the original question", "Choose Answer Here")
                     if event.message.startswith(safe_messages):
                         yield RunErrorEvent(code="question", message=event.message)
                     elif event.message == "The language service is unavailable.":
                         yield RunErrorEvent(code="provider", message="The language service is unavailable. Retry when it is connected.")
+                    elif event.message.startswith("Missing demo asset: "):
+                        dataset = event.message.removeprefix("Missing demo asset: ").removesuffix(".db")
+                        yield RunErrorEvent(code="dataset", message=f"The {dataset} dataset is unavailable. Retry after it is restored.")
+                    elif event.message.startswith(("Missing demo table: ", "no such table: ", "Catalogue mismatch for ")):
+                        yield RunErrorEvent(code="dataset", message="The selected dataset does not match the catalogue. Retry after it is restored.")
                     else:
                         yield RunErrorEvent(code="analysis", message="The analysis could not be completed. Please retry.")
                     return
                 if event.type == EventType.RUN_FINISHED:
+                    latest = conversation.saver.get_tuple(config)
                     if action == "restore":
                         conversation.replace_checkpoint(config, previous)
                     else:
-                        conversation.replace_checkpoint(config, conversation.saver.get_tuple(config))
+                        conversation.replace_checkpoint(config, latest)
                     if previous or action != "restore":
                         conversation.threads[thread_id] = None
                         conversation.threads.move_to_end(thread_id)
@@ -91,6 +102,11 @@ async def stream_turn(thread_id, run_id, action, question, dashboard, dashboards
                         oldest, _ = conversation.threads.popitem(last=False)
                         conversation.saver.delete_thread(oldest)
                     committed = True
+                    if intent.action == "discover" and latest:
+                        values = latest.checkpoint["channel_values"]
+                        if values.get("needs_original") and values["original_digest"] == conversation.fingerprint(question):
+                            token = conversation.seal_question(thread_id, question)
+                            yield CustomEvent(name="original_question_token", value=token)
                 event.raw_event = None
                 yield event
     finally:
@@ -139,7 +155,7 @@ def agent_run(payload: RunAgentInput):
 
     async def events():
         encoder = EventEncoder()
-        stream = stream_turn(thread_id, run_id, intent.action, question, dashboard, dashboards, intent.prior_question)
+        stream = stream_turn(thread_id, run_id, intent, question, dashboard, dashboards)
         async with aclosing(stream) as events_for_turn:
             async for event in events_for_turn:
                 yield encoder.encode(event)

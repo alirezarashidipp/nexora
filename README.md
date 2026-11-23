@@ -8,19 +8,21 @@ threaded analysis. The employee workspace is available at `/employees`.
 With a configured OpenAI or Azure OpenAI provider:
 
 1. Ask **How many active employees are in Bengaluru?**
-2. Select **Workforce footprint** and choose **Answer Here**. The synthetic data contains one active employee in Bengaluru.
+2. Read the reason on the **Workforce footprint** card. Choose **Open dashboard** if a destination is configured, or **Answer Here** to investigate the original question. The synthetic data contains one active employee in Bengaluru.
 3. Ask **Compare it with London.** The same metric gives Bengaluru 1 and London 2.
-4. Expand **SQL and evidence** to inspect the query, parameters and rows.
+4. Open **View chart** for the two-city comparison or **SQL and evidence** for the query, parameters and rows.
 
-Dashboard discovery sends the question and ten compact dashboard descriptions to the model.
-The workspace labels the result **Semantic match** or **Keyword fallback**. A provider outage
-still allows keyword discovery. Answer Here and follow-ups need a working model, including
-when using a suggested question. A missing dashboard match still allows analysis of the data.
+Every discovery sends the question and compact metadata for all ten dashboards to the
+configured language model. Each recommendation explains whether the published view
+provides an **Exact answer** or **Related information**. Discovery returns up to three
+cards and opens zero SQLite connections. Only provider unavailability activates
+**Keyword fallback**. A valid empty ranking or a rejected model result still offers
+**Answer Here**. Analytical turns require a working model, including the suggested examples.
 
 Each new conversation gets its own thread. One server process holds up to 64 conversations
 in RAM. Restarting it clears their memory.
 
-The catalogue contains ten fictional dashboards across five SQLite databases.
+The catalogue describes ten fictional dashboards. Five prebuilt SQLite databases provide the analytical evidence.
 For the exact schema, link configuration and reproducible build see
 [the database guide](docs/database.md). For the streaming contract see
 [the conversation API](docs/api.md#post-ag-ui).

@@ -1,6 +1,30 @@
 const MAX_BAR_ITEMS = 20;
 const MAX_PIE_ITEMS = 8;
 
+function chartElement(tag, className, text) {
+  const element = document.createElement(tag);
+  element.className = className;
+  if (text !== undefined) element.textContent = text;
+  return element;
+}
+
+function renderBarChart(data) {
+  const chart = chartElement("div", "bar-chart");
+  const maximum = Math.max(...data.items.map(item => item.value));
+  const format = new Intl.NumberFormat();
+  for (const item of data.items) {
+    const row = chartElement("div", "bar-row");
+    const track = chartElement("span", "bar-track");
+    const fill = chartElement("span", "bar-fill");
+    fill.style.width = `${100 * item.value / maximum}%`;
+    track.append(fill);
+    row.append(chartElement("span", "bar-label", item.label), track,
+      chartElement("strong", "bar-value", format.format(item.value)));
+    chart.append(row);
+  }
+  return chart;
+}
+
 function inspectChartRows(rows) {
   if (!Array.isArray(rows) || rows.length < 2 || rows.length > MAX_BAR_ITEMS) {
     return null;
