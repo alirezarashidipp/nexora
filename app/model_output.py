@@ -1,6 +1,10 @@
 """Read complete SDK responses and validate structured model output."""
 
+from typing import TypeVar
+
 from pydantic import BaseModel, ValidationError
+
+Output = TypeVar("Output", bound=BaseModel)
 
 
 def response_text(response) -> str:
@@ -17,7 +21,7 @@ def response_text(response) -> str:
     return content
 
 
-def parse_output[Output: BaseModel](response, output_type: type[Output]) -> Output:
+def parse_output(response, output_type: type[Output]) -> Output:
     content = response_text(response)
     try:
         return output_type.model_validate_json(content)

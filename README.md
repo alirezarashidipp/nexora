@@ -49,12 +49,12 @@ Try questions such as:
 
 Requirements:
 
-- Python 3.14 with `pip`
+- Python 3.11.8 with `pip`
 - An OpenAI API key or Azure OpenAI access through Microsoft Entra for general language interpretation and the employee assistant
 
 ```powershell
-# Use Python available on that computer:
-& "D:\path\to\python.exe" -m venv .venv
+py -3.11 --version  # Expected: Python 3.11.8
+py -3.11 -m venv .venv
 
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 Copy-Item .env.example .env
@@ -230,6 +230,7 @@ Keep the same `OPENAI_API_KEY` used by the app in `.env`. Optionally add
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-eval.txt
 $env:PYTHONUTF8 = "1"
+$env:DEEPEVAL_DISABLE_DOTENV = "1"  # Nexora loads the project's .env
 $env:DEEPEVAL_TELEMETRY_OPT_OUT = "1"  # optional
 ```
 

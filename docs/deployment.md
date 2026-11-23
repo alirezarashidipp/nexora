@@ -2,17 +2,21 @@
 
 ## Local development
 
+Use Python 3.11.8 to create a fresh virtual environment. If `.venv` already uses
+another interpreter, move that environment aside before creating the new one.
+
 ```powershell
 Copy-Item .env.example .env
 # Add OPENAI_API_KEY to .env
-python -m venv .venv
+py -3.11 --version  # Expected: Python 3.11.8
+py -3.11 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install -r requirements.txt
 python main.py
 ```
 
-When `python` is not on `PATH`, use the full path to `python.exe` to create
-`.venv`; commands after activation use the virtual environment automatically.
+If the launcher selects a different patch version, use the full path to the
+3.11.8 executable to create `.venv`. Commands after activation use that environment.
 
 `main.py` starts Uvicorn on `127.0.0.1:8000` with reload enabled. This entry
 point is for local development only.

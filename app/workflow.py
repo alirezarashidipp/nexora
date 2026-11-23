@@ -1,7 +1,8 @@
-from typing import Literal, NotRequired, TypedDict
+from typing import Literal, NotRequired
 
 from langgraph.graph import END, START, StateGraph
 from pydantic import BaseModel, ConfigDict
+from typing_extensions import TypedDict
 
 from .llm_connection import create_completion, llm_connection
 from .database import describe_table, execute_sql

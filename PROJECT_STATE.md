@@ -4,6 +4,10 @@ Last updated: 2026-11-23
 
 ## Status
 
+The project targets CPython 3.11.8. The Windows virtual environment, all 69
+unit tests and the SQLite self-check were verified with that exact interpreter.
+CI reads the version from `.python-version`; the Dockerfile pins the same patch.
+
 The desktop workspace supports **Ask Once → Discover → Choose → Investigate → Verify → Continue**.
 Every discovery asks the language model to rank the six published YAML entries. Up to three
 cards explain exact or related coverage. A configured link opens the dashboard and
