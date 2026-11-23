@@ -6,11 +6,11 @@
   <meta name="theme-color" content="#f3f5f7">
   <title>Employee workspace | Nexora</title>
   <link rel="icon" type="image/svg+xml" href="/static/image/HSBC_logo_(2018)%20(1).svg">
-  <link rel="stylesheet" href="/static/style.css?v=16">
+  <link rel="stylesheet" href="/static/style.css?v=17">
   <script src="/static/chart.js" defer></script>
   <link rel="stylesheet" href="/static/conversation.css">
-  <script defer src="/static/conversation.js"></script>
-  <script defer src="/static/app.js?v=9"></script>
+  <script defer src="/static/conversation.js?v=2"></script>
+  <script defer src="/static/app.js?v=10"></script>
 </head>
 <body>
   <div class="app-frame" id="top">
@@ -20,11 +20,14 @@
         <span class="brand-divider" aria-hidden="true"></span>
         <span class="brand-name">Nexora</span>
       </a>
-      <nav class="top-nav" aria-label="Sections">
-        <a href="#workspace" aria-current="page">Employee workspace</a>
-      </nav>
+      <div class="top-nav" role="tablist" aria-label="Nexora sections">
+        <button type="button" role="tab" id="workspace-tab" aria-selected="true" aria-controls="workspace-panel">Employee workspace</button>
+        <button type="button" role="tab" id="dashboards-tab" aria-selected="false" aria-controls="dashboards-panel" tabindex="-1">Dashboards</button>
+        <button type="button" role="tab" id="databases-tab" aria-selected="false" aria-controls="databases-panel" tabindex="-1">Databases</button>
+      </div>
     </header>
     <main class="page-content">
+      <div id="workspace-panel" role="tabpanel" aria-labelledby="workspace-tab" tabindex="0">
       <div class="hero-grid">
         <div class="hero-scene" aria-hidden="true">
           <div class="glass-panel glass-panel-one"></div>
@@ -75,6 +78,20 @@
         </header>
         <ol id="sample-list" class="sample-list"></ol>
         <p id="sample-error" hidden>Sample questions could not be loaded. <button id="retry-samples" type="button">Retry</button></p>
+      </section>
+      </div>
+      <section id="dashboards-panel" class="catalogue-panel" role="tabpanel" aria-labelledby="dashboards-tab" tabindex="0" hidden>
+        <h1>Dashboards</h1>
+        <p class="catalogue-status" role="status"></p>
+        <button type="button" class="catalogue-retry" hidden>Retry</button>
+        <div id="dashboard-list" class="dashboard-grid"></div>
+      </section>
+      <section id="databases-panel" class="catalogue-panel" role="tabpanel" aria-labelledby="databases-tab" tabindex="0" hidden>
+        <h1>Databases</h1>
+        <p class="catalogue-disclosure">Synthetic workplace data</p>
+        <p class="catalogue-status" role="status"></p>
+        <button type="button" class="catalogue-retry" hidden>Retry</button>
+        <div id="database-list"></div>
       </section>
     </main>
   </div>

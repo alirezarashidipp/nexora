@@ -4,6 +4,10 @@ Open the [Employee workspace](http://127.0.0.1:8000/employees). Type a question 
 review the matching dashboards, or choose **Answer Here** to investigate in place.
 Expand **SQL and evidence** to inspect the sources, parameters and returned rows.
 
+Open **Dashboards** to browse the six published dashboards, read what each covers and follow its link.
+Open **Databases** to see a short description of each data source and the column names grouped by table.
+You can switch back to **Employee workspace** to continue your question.
+
 Every discovery sends the question and compact metadata for all dashboards listed in `app/dashboards.yml` to the
 configured language model. Each recommendation explains whether the published view
 provides an **Exact answer** or **Related information**. Discovery returns up to three

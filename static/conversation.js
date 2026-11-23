@@ -18,6 +18,20 @@ function element(tag, text) {
   return node;
 }
 
+function dashboardDestination(item) {
+  const sample = item.url_status === "sample";
+  if ((sample || item.url_status === "configured") && /^https:\/\//i.test(item.dashboard_url)) {
+    const label = sample ? "Open sample link" : "Open dashboard";
+    const link = element("a", label + " ↗");
+    link.setAttribute("aria-label", label + " for " + item.title + " (opens in a new tab)");
+    link.href = item.dashboard_url;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    return link;
+  }
+  return element("small", item.url_status === "placeholder" ? "Dashboard link not configured" : "Dashboard link unavailable");
+}
+
 function renderMatches(items) {
   const list = byId("matches");
   list.replaceChildren();
@@ -35,16 +49,11 @@ function renderMatches(items) {
     coverage.className = "coverage " + item.coverage;
     label.append(input, element("strong", item.title), coverage);
     card.append(label, element("p", item.reason));
-    if (item.url_status === "sample" || item.url_status === "configured") {
-      const link = element("a", item.url_status === "sample" ? "Open sample link ↗" : "Open dashboard ↗");
-      link.href = item.dashboard_url;
-      link.target = "_blank";
-      link.rel = "noopener noreferrer";
-      link.addEventListener("click", () => { if (!input.checked) select(); });
-      card.append(link);
-    } else {
-      card.append(element("small", item.url_status === "placeholder" ? "Dashboard link not configured" : "Dashboard link unavailable"));
+    const destination = dashboardDestination(item);
+    if (destination.tagName === "A") {
+      destination.addEventListener("click", () => { if (!input.checked) select(); });
     }
+    card.append(destination);
     list.append(card);
   }
   if (!items.length) {

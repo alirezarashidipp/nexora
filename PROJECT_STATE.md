@@ -4,7 +4,7 @@ Last updated: 2026-11-23
 
 ## Status
 
-The project targets CPython 3.11.8. The Windows virtual environment, all 69
+The project targets CPython 3.11.8. The Windows virtual environment, all 71
 unit tests and the SQLite self-check were verified with that exact interpreter.
 CI reads the version from `.python-version`; the Dockerfile pins the same patch.
 
@@ -77,6 +77,10 @@ the generated SQL, and get an answer grounded in the database result.
   backdrop, and system fonts.
 - Employee workspace serves discovery, Answer Here, chart, SQL evidence and thread history
   at `/`, `/employees` and the redirect from `/conversation`.
+- The **Dashboards** and **Databases** tabs share a read-only metadata catalogue at
+  `GET /catalogue`. The database tab lists column names by table for the five analytical
+  sources and the separate employee database used by `/ask`. Desktop Chrome checks
+  verified that switching tabs preserves drafts, the active thread and answer evidence.
 - The published dashboard catalogue lives in `app/dashboards.yml`. The page opens
   with a free-text question field and five clickable examples, from a single-office lookup to a comparison of attendance on rainy days.
 - Standard-library tests cover API/schema contracts, workflow routing,

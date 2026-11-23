@@ -9,6 +9,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
+from fastapi.testclient import TestClient
+
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_ENV = {}
 for line in (ROOT / ".env.example").read_text(encoding="utf-8").splitlines():
@@ -36,7 +38,7 @@ os.environ.update(
 from app import api, config, database, workflow
 from app import llm_connection as connection
 from app.config import STATIC_DIR
-from app.schema import COLUMN_GUIDE, TABLE_NAME
+from app.schema import COLUMN_GUIDE, DEMO_COLUMNS, TABLE_NAME
 
 
 class ConfigTests(unittest.TestCase):
@@ -183,6 +185,49 @@ class CoreDatabaseTests(unittest.TestCase):
 
 
 class ContractTests(unittest.TestCase):
+    def test_catalogue_lists_public_metadata_without_reading_sqlite(self):
+        with tempfile.TemporaryDirectory() as directory:
+            settings = Path(directory) / "urls.json"
+            settings.write_text(json.dumps({
+                "workforce": "https://reports.company.com/workforce",
+                "estate": None,
+            }), encoding="utf-8")
+            with (
+                patch.dict(os.environ, {"NEXORA_DASHBOARD_URLS_FILE": str(settings)}),
+                patch.object(sqlite3, "connect", side_effect=AssertionError("Unexpected database read")),
+            ):
+                response = TestClient(api.app).get("/catalogue")
+
+        self.assertEqual(response.status_code, 200)
+        result = response.json()
+        dashboards = {item["dashboard_id"]: item for item in result["dashboards"]}
+        self.assertEqual(set(dashboards), {"workforce", "estate", "portfolio", "hiring", "occupancy", "cost"})
+        for item in dashboards.values():
+            self.assertEqual(set(item), {"dashboard_id", "title", "description", "dashboard_url", "url_status"})
+            self.assertTrue(item["title"] and item["description"])
+        self.assertEqual(dashboards["workforce"]["dashboard_url"], "https://reports.company.com/workforce")
+        self.assertEqual(dashboards["workforce"]["url_status"], "configured")
+        self.assertIsNone(dashboards["estate"]["dashboard_url"])
+        self.assertEqual(dashboards["portfolio"]["url_status"], "sample")
+
+        tables = {}
+        for source in result["databases"]:
+            self.assertTrue(source["description"])
+            self.assertTrue(source["name"].endswith(".db"))
+            for table in source["tables"]:
+                self.assertEqual(set(table), {"name", "columns"})
+                key = source["name"].removesuffix(".db") + "." + table["name"]
+                tables[key] = table["columns"]
+        expected = {name: list(columns) for name, columns in DEMO_COLUMNS.items()}
+        expected["main_datawarehouse." + TABLE_NAME] = list(COLUMN_GUIDE)
+        self.assertEqual(tables, expected)
+
+    def test_invalid_dashboard_catalogue_returns_safe_error(self):
+        with patch.object(api, "read_dashboards", side_effect=ValueError("private details")):
+            response = TestClient(api.app).get("/catalogue")
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["detail"], "The dashboard catalogue is unavailable.")
+
     def test_provider_errors_are_redacted_and_configuration_errors_are_safe(self):
         from fastapi import HTTPException
         from openai import OpenAIError

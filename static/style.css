@@ -21,10 +21,10 @@ button:active:not(:disabled) { transform: translateY(1px); }
 .brand-divider { height: 22px; width: 1px; background: var(--color-rule-strong); }
 .brand-name { font-size: 16px; letter-spacing: -.5px; white-space: nowrap; }
 .top-nav { display: flex; align-self: stretch; align-items: stretch; gap: 36px; }
-.top-nav a { display: flex; position: relative; align-items: center; font-size: 12px; font-weight: 600; color: var(--color-muted); }
-.top-nav a[aria-current] { color: var(--color-ink-strong); }
-.top-nav a[aria-current]::after { content: ""; position: absolute; bottom: 6px; left: 0; right: 0; height: 2px; background: var(--color-accent); }
-.top-nav a:hover { color: var(--color-accent); }
+.top-nav button { position: relative; border: 0; padding: 0; background: transparent; color: var(--color-muted); font-size: 13px; font-weight: 600; }
+.top-nav button[aria-selected="true"] { color: var(--color-ink-strong); }
+.top-nav button[aria-selected="true"]::after { content: ""; position: absolute; bottom: 6px; left: 0; right: 0; height: 2px; background: var(--color-accent); }
+.top-nav button:hover { color: var(--color-accent); }
 .page-content { padding: 0 var(--space-6); }
 .panel { border: 1px solid var(--color-surface); border-radius: var(--radius-panel); background: var(--color-surface-glass); box-shadow: 0 3px 18px var(--color-shadow); }
 
@@ -72,6 +72,27 @@ button:active:not(:disabled) { transform: translateY(1px); }
 .sample-list button:hover { border-color: var(--color-accent); }
 .sample-section[inert] button { opacity: .6; }
 #retry-samples { color: var(--color-accent); border: 0; background: transparent; text-decoration: underline; }
+
+.catalogue-panel { max-width: 1320px; margin: 0 auto; padding: 44px 16px 56px; }
+.catalogue-panel > h1 { margin-bottom: 28px; font: 700 44px/1.1 var(--font-display); letter-spacing: -.045em; }
+.catalogue-disclosure { margin: -16px 0 24px; color: var(--color-ink-soft); }
+.catalogue-status:not(:empty) { margin: 16px 0 8px; color: var(--color-ink-soft); }
+.catalogue-retry { padding: 6px 14px; border: 1px solid var(--color-rule-strong); border-radius: var(--radius-control); background: var(--color-surface); }
+.dashboard-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.dashboard-card, .database-entry { border: 1px solid var(--color-rule-strong); border-radius: var(--radius-panel); background: var(--color-surface); }
+.dashboard-card { display: flex; flex-direction: column; align-items: flex-start; padding: 24px; }
+.dashboard-card h2, .database-entry h2 { font-size: 21px; line-height: 1.25; letter-spacing: -.03em; }
+.dashboard-card p, .database-entry header p { margin-top: 8px; color: var(--color-ink-soft); }
+.dashboard-card > :last-child { margin-top: auto; padding-top: 22px; }
+.dashboard-card a { color: var(--color-accent-hover); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.dashboard-card small { color: var(--color-muted); }
+#database-list { display: grid; gap: 14px; }
+.database-entry { display: grid; grid-template-columns: minmax(210px, 26%) 1fr; gap: 32px; padding: 22px 24px; }
+.database-entry dl { margin: 0; border-left: 1px solid var(--color-rule); padding-left: 28px; }
+.database-entry dt { font: 600 14px/1.4 var(--font-mono); }
+.database-entry dd { display: flex; flex-wrap: wrap; gap: 5px; margin: 7px 0 0; }
+.database-entry dd + dt { margin-top: 14px; }
+.database-entry code { border-radius: 4px; padding: 2px 6px; background: var(--color-surface-muted); color: var(--color-ink-soft); font: 12px/1.5 var(--font-mono); }
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }

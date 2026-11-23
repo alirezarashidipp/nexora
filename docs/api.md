@@ -7,6 +7,17 @@ is available at <http://127.0.0.1:8000/docs>.
 
 Returns the Employee workspace. `GET /employees` serves the same page. The old `GET /conversation` redirects to `/employees`.
 
+## `GET /catalogue`
+
+Returns the reference metadata used by the **Dashboards** and **Databases** tabs.
+
+| Array | Contents |
+| --- | --- |
+| `dashboards` | Six entries with `dashboard_id`, `title`, `description`, `dashboard_url` and `url_status`. Links follow the same configuration as discovery cards. |
+| `databases` | Each entry has a `name`, a short `description` and `tables`. A table has a `name` and a `columns` array of names. The catalogue includes the five analytical sources and the employee database used by `/ask`. |
+
+Browsing the catalogue reads published metadata. It runs no SQL and makes no model calls.
+
 ## POST /ag-ui
 
 Send an AG-UI `RunAgentInput` and accept `text/event-stream`. Use a UUID for

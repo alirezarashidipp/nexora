@@ -7,6 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from openai import OpenAIError
 from pydantic import BaseModel, Field
 
+from .catalogue import database_catalogue, read_dashboards
 from .config import STATIC_DIR
 from .conversation_api import router as conversation_router
 from .llm_connection import LLMConfigurationError, LLMConnectionError
@@ -34,6 +35,20 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 @app.get("/employees", response_class=FileResponse)
 def employee_workspace():
     return STATIC_DIR / "index.html"
+
+
+@app.get("/catalogue")
+def catalogue():
+    try:
+        dashboards = read_dashboards()
+    except (OSError, ValueError):
+        raise HTTPException(503, "The dashboard catalogue is unavailable.") from None
+
+    fields = ("dashboard_id", "title", "description", "dashboard_url", "url_status")
+    return {
+        "dashboards": [{key: dashboard[key] for key in fields} for dashboard in dashboards],
+        "databases": database_catalogue(),
+    }
 
 
 @app.get("/schema")

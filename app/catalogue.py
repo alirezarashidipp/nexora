@@ -13,11 +13,18 @@ from urllib.parse import urlsplit
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from .schema import DEMO_COLUMNS, DEMO_KEYS
+from .schema import COLUMN_GUIDE, DEMO_COLUMNS, DEMO_KEYS, TABLE_NAME
 
 DEMO_DIR = Path(__file__).resolve().parent.parent / "demo_data"
 TEAMS = ("Platform", "Delivery", "Insights")
 ROLES = ("Engineer", "Analyst", "Planner")
+DATABASE_DESCRIPTIONS = {
+    "workforce": "Employee assignments, weekly schedules and office visits.",
+    "locations": "Office locations, capacity, rent and dashboard metadata.",
+    "portfolio": "Project staffing requirements, assignments and hiring requests.",
+    "facilities": "Daily office attendance, peak occupancy, energy use and costs.",
+    "external": "Local weather and office holidays.",
+}
 
 
 class Join(NamedTuple):
@@ -139,6 +146,25 @@ def read_dashboards() -> list[dict]:
                 item["url_status"] = "unavailable"
         dashboards.append(item)
     return dashboards
+
+
+def database_catalogue() -> list[dict]:
+    """List declared tables and column names without opening SQLite files."""
+    databases = []
+    for database, description in DATABASE_DESCRIPTIONS.items():
+        tables = []
+        for qualified_name, columns in DEMO_COLUMNS.items():
+            source, table = qualified_name.split(".")
+            if source == database:
+                tables.append({"name": table, "columns": list(columns)})
+        databases.append({"name": f"{database}.db", "description": description, "tables": tables})
+
+    databases.append({
+        "name": "main_datawarehouse.db",
+        "description": "Employee names, departments, job titles and status for the stateless /ask API.",
+        "tables": [{"name": TABLE_NAME, "columns": list(COLUMN_GUIDE)}],
+    })
+    return databases
 
 
 def find_dashboards(question: str, dashboards: list[dict]) -> list[str]:
