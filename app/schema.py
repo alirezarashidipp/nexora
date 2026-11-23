@@ -1,6 +1,121 @@
 TABLE_NAME = "data"
 
 
+# The five conversation databases are prebuilt fixtures, separate from /ask.
+def column(data_type, description, aliases, possible_values, unit=""):
+    return dict(type=data_type, description=description, aliases=aliases,
+                possible_values=possible_values, unit=unit)
+
+
+employee_id = column("INTEGER", "Fictional worker key.", ["worker id"], "1 to 12")
+office_id = column("TEXT", "Key of a physical office.", ["site id"], "LON, BRS, MAN")
+city_code = column("TEXT", "City identifier.", ["city"], "LON, BRS, MAN")
+team_id = column("TEXT", "Delivery team identifier.", ["team"], "Platform, Delivery, Insights")
+job_role = column("TEXT", "Job family.", ["job", "position"], "Engineer, Analyst, Planner")
+project_id = column("TEXT", "Portfolio project key.", ["project"], "P01 to P06")
+country = column("TEXT", "ISO country code.", ["country"], "GB")
+day = column("TEXT", "Local calendar date.", ["date", "day"], "ISO YYYY-MM-DD", "day")
+onsite = column("INTEGER", "Planned attendance on this weekday.", ["office day"], "0 = offsite, 1 = onsite", "day")
+fte = column("REAL", "Full-time equivalent capacity.", ["full-time equivalent"], "Non-negative decimal", "FTE")
+
+# Column order is also the provisioned SQLite contract.
+DEMO_COLUMNS = {
+    "workforce.employees": {
+        "employee_id": employee_id, "team_id": team_id, "role": job_role,
+        "home_office_id": column("TEXT", "Office of assignment.", ["home site"], "LON, BRS, MAN"),
+        "contract_city": column("TEXT", "City on the work contract.", ["contract location"], "London, Bristol, Manchester"),
+        "worker_type": column("TEXT", "Engagement type.", ["employment type"], "Employee, Contractor"),
+        "fte": fte, "active": column("INTEGER", "Worker included in the current workforce snapshot.", ["active worker"], "0 = inactive, 1 = active"),
+    },
+    "workforce.weekly_schedule": {
+        "employee_id": employee_id, "week_start": column("TEXT", "Monday starting the schedule week.", ["week"], "ISO Monday", "day"),
+        "mon": onsite, "tue": onsite, "wed": onsite, "thu": onsite, "fri": onsite,
+        "schedule_type": column("TEXT", "Agreed working pattern.", ["work pattern"], "Hybrid, Remote"),
+    },
+    "workforce.badge_visits": {
+        "visit_id": column("INTEGER", "Unique building visit.", ["entry id"], "Positive integer"),
+        "employee_id": employee_id, "visited_office_id": column("TEXT", "Office actually entered.", ["visited site"], "LON, BRS, MAN"),
+        "visit_date": day, "check_in": column("TEXT", "Local arrival time.", ["arrival"], "HH:MM"),
+        "check_out": column("TEXT", "Local departure time.", ["departure"], "HH:MM"),
+        "visit_type": column("TEXT", "Visit relative to home office.", ["visit category"], "Home, Visiting"),
+        "source": column("TEXT", "Synthetic access system.", ["badge system"], "Demo badge reader"),
+    },
+    "locations.offices": {
+        "office_id": office_id, "office_name": column("TEXT", "Display name of the office.", ["site"], "London, Bristol, Manchester"),
+        "city_code": city_code, "country_code": country,
+        "timezone": column("TEXT", "IANA office time zone.", ["time zone"], "Europe/London"),
+        "seat_capacity": column("INTEGER", "Available workstations.", ["desks", "seats"], "Positive integer", "seats"),
+        "floor_area_sqm": column("REAL", "Internal floor area.", ["floor space"], "Positive decimal", "m²"),
+        "monthly_rent_gbp": column("REAL", "Contracted rent per month.", ["rent"], "Non-negative decimal", "GBP/month"),
+    },
+    "locations.dashboard_catalog": {
+        "dashboard_id": column("TEXT", "Stable catalogue key.", ["report id"], "One of ten configured slugs"),
+        "title": column("TEXT", "Dashboard display title.", ["report name"], "Fictional dashboard title"),
+        "description": column("TEXT", "Business question covered.", ["purpose"], "Catalogue text"),
+        "kpi_tags_json": column("TEXT", "Supported measure names.", ["KPIs"], "JSON string array"),
+        "source_tables_json": column("TEXT", "Qualified source table names.", ["lineage"], "JSON string array"),
+        "dashboard_url": column("TEXT", "Configured dashboard destination.", ["link"], "HTTPS URL"),
+        "url_status": column("TEXT", "Link configuration status.", ["link status"], "placeholder, configured"),
+        "keywords_json": column("TEXT", "Search vocabulary.", ["aliases"], "JSON string array"),
+    },
+    "portfolio.portfolio_projects": {
+        "project_id": project_id, "project_name": column("TEXT", "Fictional portfolio initiative.", ["initiative"], "Named demo project"),
+        "team_id": team_id, "lead_office_id": column("TEXT", "Office accountable for delivery.", ["lead site"], "LON, BRS, MAN"),
+        "required_fte": column("REAL", "Capacity needed to deliver the project.", ["demand"], "Non-negative decimal", "FTE"),
+        "assigned_fte": column("REAL", "Capacity already allocated to the project.", ["allocation"], "Non-negative decimal", "FTE"),
+        "due_date": column("TEXT", "Planned project delivery date.", ["deadline"], "ISO YYYY-MM-DD", "day"),
+        "priority": column("TEXT", "Delivery priority.", ["urgency"], "High, Medium, Low"),
+    },
+    "portfolio.hiring_requests": {
+        "request_id": column("TEXT", "Hiring requisition key.", ["requisition"], "H01 to H06"),
+        "project_id": project_id, "team_id": team_id, "office_id": office_id, "role": job_role,
+        "open_fte": column("REAL", "Remaining unfilled capacity on the requisition.", ["vacancy"], "Non-negative decimal", "FTE"),
+        "expected_start_date": column("TEXT", "Planned start date for the hire.", ["start"], "ISO YYYY-MM-DD", "day"),
+        "status": column("TEXT", "Requisition state.", ["hiring status"], "Open, Filled"),
+    },
+    "facilities.office_daily_metrics": {
+        "office_id": office_id, "metric_date": day,
+        "onsite_headcount": column("INTEGER", "Distinct people onsite that day.", ["daily attendance"], "0 to seat capacity", "people"),
+        "peak_occupancy": column("INTEGER", "Maximum simultaneous occupants that day.", ["peak attendance"], "0 to daily headcount", "people"),
+        "energy_kwh": column("REAL", "Electricity consumed that day.", ["energy use"], "Non-negative decimal", "kWh"),
+        "energy_cost_gbp": column("REAL", "Daily electricity charge.", ["energy cost"], "Non-negative decimal", "GBP"),
+        "other_cost_gbp": column("REAL", "Daily operating costs excluding energy and rent.", ["other costs"], "Non-negative decimal", "GBP"),
+        "quality_flag": column("TEXT", "Measurement quality.", ["data quality"], "Verified"),
+    },
+    "external.weather_daily": {
+        "city_code": city_code, "date": day, "temp_c": column("REAL", "Mean daily air temperature.", ["temperature"], "Decimal degrees Celsius", "°C"),
+        "rain_mm": column("REAL", "Daily precipitation.", ["rainfall"], "Non-negative decimal", "mm"),
+        "condition": column("TEXT", "Daily weather category.", ["weather"], "Clear, Rain"),
+        "alert_level": column("TEXT", "Local weather warning.", ["warning"], "None, Yellow"),
+        "source": column("TEXT", "Weather provider.", ["provider"], "Demo weather"),
+        "recorded_at": column("TEXT", "Observation timestamp in UTC.", ["observation time"], "ISO 8601 UTC"),
+    },
+    "external.holiday_calendar": {
+        "office_id": office_id, "holiday_date": day,
+        "holiday_name": column("TEXT", "Fictional closure or observance.", ["holiday"], "Named demo event"),
+        "holiday_type": column("TEXT", "Kind of calendar event.", ["event type"], "Local, Observance"),
+        "country_code": country, "region_code": column("TEXT", "Office region.", ["region"], "ENG"),
+        "office_closed": column("INTEGER", "Office unavailable on this date.", ["closure"], "0 = open, 1 = closed"),
+        "source": column("TEXT", "Calendar owner.", ["calendar source"], "Demo calendar"),
+    },
+}
+
+DEMO_KEYS = {
+    "workforce.employees": ("employee_id",), "workforce.weekly_schedule": ("employee_id", "week_start"),
+    "workforce.badge_visits": ("visit_id",), "locations.offices": ("office_id",),
+    "locations.dashboard_catalog": ("dashboard_id",), "portfolio.portfolio_projects": ("project_id",),
+    "portfolio.hiring_requests": ("request_id",), "facilities.office_daily_metrics": ("office_id", "metric_date"),
+    "external.weather_daily": ("city_code", "date"), "external.holiday_calendar": ("office_id", "holiday_date"),
+}
+
+DEMO_EXAMPLES = {
+    "How many active employees are in Bristol?": ("workforce", "employees"),
+    "What was the energy cost in Manchester?": ("cost", "energy_cost"),
+    "What was rainy-day attendance in Bristol?": ("weather", "rain_attendance"),
+    "What is the project staffing gap in London?": ("portfolio", "staffing_gap"),
+}
+
+
 COLUMN_GUIDE = {
     "EMPLOYEE_ID": {
         "description": "Unique numeric identifier for one employee.",

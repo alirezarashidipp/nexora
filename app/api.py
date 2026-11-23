@@ -8,6 +8,7 @@ from openai import OpenAIError
 from pydantic import BaseModel, Field
 
 from .config import STATIC_DIR
+from .conversation_api import router as conversation_router
 from .llm_connection import LLMConfigurationError, LLMConnectionError
 from .database import describe_table, table_schema
 from .schema import EXAMPLE_QUESTIONS, TABLE_NAME
@@ -25,11 +26,17 @@ async def lifespan(_app: FastAPI):
 
 
 app = FastAPI(title=f"{TABLE_NAME} SQL Assistant", lifespan=lifespan)
+app.include_router(conversation_router)
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
 @app.get("/", response_class=FileResponse)
 def index():
+    return STATIC_DIR / "conversation.html"
+
+
+@app.get("/employees", response_class=FileResponse)
+def employee_workspace():
     return STATIC_DIR / "index.html"
 
 

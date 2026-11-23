@@ -23,6 +23,25 @@ or sensitive employee records.
 Prompt rules are helpful but are not a security boundary. Do not remove the
 independent SQL and SQLite controls.
 
+## Conversation workspace
+
+The conversation route builds SQL from reviewed catalogue expressions and join
+keys. User and model input can supply validated filter values, bound as SQLite
+parameters. Each asset is attached using a fixed file name and URI `mode=ro`.
+The connection enables `query_only`. Its authorizer checks the database, table,
+column and allowed aggregate functions for this plan. The original `/ask`
+validator and fixed-table authorizer continue to guard the employee path.
+
+Only short questions consisting of the public demo vocabulary and calendar dates
+are retained verbatim. Other original wording stays in the current browser page
+until Answer Here, which verifies it against a keyed fingerprint. After a reload
+the user may need to re-enter that wording. The graph stores bounded business
+context. Raw rows, SQL, schemas, provider output and unrestricted free text stay
+outside checkpoints. General phrasing is processed by the configured provider.
+
+Thread UUIDs identify conversations. They do not authenticate users. Serve this
+single-process demo on localhost with synthetic data.
+
 ## Secrets
 
 - Store `OPENAI_API_KEY` and `AZURE_CLIENT_SECRET` only in ignored `.env` files or the

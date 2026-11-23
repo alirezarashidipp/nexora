@@ -1,5 +1,43 @@
 # Database
 
+## Conversation fixtures
+
+The five files in `demo_data/` contain only fictional data. The catalogue
+in `app/schema.py` defines ordered columns, SQLite types, aliases, possible
+values, units and primary keys. `app/catalogue.py` defines the business measures,
+aggregation grain, approved many-to-one paths and dashboard-to-table mappings.
+
+| Database | Tables | Grain |
+| --- | --- | --- |
+| workforce.db | employees, weekly_schedule, badge_visits | Worker, worker-week, visit |
+| locations.db | offices, dashboard_catalog | Office, dashboard |
+| portfolio.db | portfolio_projects, hiring_requests | Project, requisition |
+| facilities.db | office_daily_metrics | Office and local date |
+| external.db | weather_daily, holiday_calendar | City and date, office and holiday date |
+
+Manchester, Bristol and London each have one fictional office. The observations
+cover 16–20 November 2026. Badge entries determine daily attendance. Rainy-day
+attendance joins both city and local date. Comparing attendance across days counts
+person-days. Workforce headcount counts distinct active employees at their home office.
+
+Rebuild into a new directory with `python build_demo_data.py --output demo_rebuilt`.
+The builder uses fixed dates and inputs, validates all ten tables and join
+cardinalities and publishes the directory only after validation. Stop the service
+before replacing fixture files. `python main.py --check` validates the shipped set.
+The 20-row ceiling applies to fixture provisioning. Queries return every matching group.
+
+By default all ten dashboard URLs point to fictional example.org destinations.
+To activate real links, set `NEXORA_DASHBOARD_URLS_FILE` to a JSON file mapping
+any dashboard IDs to HTTPS URLs. This entry configures the workforce dashboard.
+
+```json
+{"workforce": "https://reports.example.org/workforce"}
+```
+
+The IDs are `workforce`, `schedule`, `visits`, `estate`, `portfolio`, `hiring`,
+`occupancy`, `cost`, `weather` and `closures`. Configured links appear in the
+workspace. The configured status means a destination URL has been supplied.
+
 ## Existing-file contract
 
 `DATABASE_PATH=main_datawarehouse.db` resolves relative to the project root. The tracked

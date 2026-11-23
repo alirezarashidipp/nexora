@@ -1,4 +1,26 @@
-# Employee SQL Assistant
+# Nexora
+
+Open the desktop app at <http://127.0.0.1:8000> for dashboard discovery and
+threaded analysis. The employee workspace is available at `/employees`.
+
+## Try a conversation
+
+1. Ask **How many active employees are in Bristol?**
+2. Choose **Workforce footprint**, then **Answer Here**. The result is **3 people**.
+3. Ask **Compare it with London.** Nexora returns **Bristol 3, London 4**.
+4. Expand **SQL and evidence** to see the query, bound parameters and returned rows.
+
+The four suggested questions and city comparisons run locally on the synthetic
+assets. Other phrasing uses the configured OpenAI or Azure provider to interpret
+the question. **New conversation** starts an independent thread. One server
+process holds up to 64 conversations in RAM. Restarting it clears their memory.
+
+The catalogue contains ten fictional dashboards across five SQLite databases.
+For the exact schema, link configuration and reproducible build see
+[the database guide](docs/database.md). For the streaming contract see
+[the conversation API](docs/api.md#post-ag-ui).
+
+## Employee SQL assistant
 
 Ask a question in plain English, turn it into guarded SQLite, and return an
 answer grounded in the query result.
@@ -30,7 +52,7 @@ Try questions such as:
 Requirements:
 
 - Python 3.14 with `pip`
-- An OpenAI API key or Azure OpenAI access through Microsoft Entra
+- An OpenAI API key or Azure OpenAI access through Microsoft Entra for general language interpretation and the employee assistant
 
 ```powershell
 # Use Python available on that computer:
@@ -55,7 +77,7 @@ docker compose up --build
 
 Open <http://127.0.0.1:8000>. The image includes the existing fictional
 `main_datawarehouse.db` asset and opens it read-only. `.env` is supplied only at
-runtime.
+runtime. The image also includes the five read-only conversation assets.
 
 ## Configuration
 
@@ -111,7 +133,7 @@ table's live schema through
 
 ## Safety boundary
 
-Generated SQL is untrusted. The backend accepts a single `SELECT` against the
+Generated SQL is untrusted. The employee backend accepts a single `SELECT` against the
 fixed `data` table, enables `PRAGMA query_only`, and installs a SQLite authorizer
 that denies other tables and write operations. These layers must remain in
 place even when prompts improve.

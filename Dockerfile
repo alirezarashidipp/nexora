@@ -13,6 +13,7 @@ COPY prompts ./prompts
 COPY static ./static
 COPY main.py ./
 COPY main_datawarehouse.db ./main_datawarehouse.db
+COPY demo_data/*.db ./demo_data/
 
 RUN useradd --create-home appuser
 

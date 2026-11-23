@@ -5,7 +5,37 @@ is available at <http://127.0.0.1:8000/docs>.
 
 ## `GET /`
 
-Returns `static/index.html`.
+Returns the conversation workspace. `GET /conversation` opens the same page.
+`GET /employees` opens the original employee workspace.
+
+## POST /ag-ui
+
+Send an AG-UI `RunAgentInput` and accept `text/event-stream`. Use a UUID for
+each new conversation and a fresh run UUID for each action. Retry a failed
+delivery with the same run ID. The server uses the last plain-text user message
+and its own checkpoint. Arbitrary client state never becomes conversation memory.
+
+```json
+{
+  "threadId": "056d8656-a33e-46bb-a9e4-60a547dfacf9",
+  "runId": "8ea2878a-f074-4efb-88a2-f4af9b0b497e",
+  "messages": [{"id": "q1", "role": "user", "content": "How many active employees are in Bristol?"}],
+  "forwardedProps": {"action": "discover"}
+}
+```
+
+| Action | Input | Result |
+| --- | --- | --- |
+| `discover` | First question in a new thread | Ranked dashboard metadata |
+| `select` | `forwardedProps.dashboard` from the recommendations | Synchronised selection |
+| `answer_here` | Same thread, optional original message | Answer to the original question or a clarification |
+| `followup` | New user message, same thread | Contextual analysis or a clarification |
+| `restore` | Thread ID and empty messages | Current view, or a fresh view for an expired thread |
+
+A successful stream emits `RUN_STARTED`, `STATE_SNAPSHOT`, then `RUN_FINISHED`.
+An execution failure emits `RUN_ERROR` and preserves the previous successful turn.
+A malformed request receives HTTP 422. SQL parameters are positional in the
+order shown. `GET /conversation/examples` returns the four offline demo questions.
 
 ## `GET /schema`
 

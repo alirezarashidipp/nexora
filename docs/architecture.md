@@ -2,6 +2,34 @@
 
 ## Purpose
 
+The default workspace discovers dashboards and answers questions across the
+prebuilt demo sources. `POST /ag-ui` validates the current user action, runs a
+checkpointed graph and streams a complete UI state snapshot. The browser stores
+the thread UUID in session storage. Server state supplies the conversation context.
+
+1. `read_dashboards` searches only `locations.dashboard_catalog` during discovery.
+2. `handle_turn` restores the original question and selected dashboard for Answer Here.
+3. `resolve_plan` resolves the measure, breakdown and filters. Standard demo
+   questions and city comparisons resolve locally. Other wording goes through
+   the existing provider connection with the relevant slice of the semantic catalogue.
+   When discovery has no match, Answer Here also checks measure aliases such as
+   “floor space”. An ambiguous or unknown subject prompts a clarification.
+4. `analyse` builds a parameterised aggregate SELECT using approved joins. Live
+   column definitions and keys are checked on first use and cached by table.
+5. The API sends SQL, parameters, the metric definition, source names and rows in
+   an AG-UI snapshot. The LangGraph checkpoint retains the compact plan and source names.
+   A page reload reconstructs the latest evidence from the immutable fixtures.
+
+The application uses ordinary LangGraph state channels, the public checkpointer
+API and one lock for in-process turns. A failed turn restores the preceding
+checkpoint. Each thread retains its six most recent questions, six compact analysis
+contexts and twelve run IDs
+for retries. A duplicate run synchronises to the current state.
+See [AG-UI state snapshots](https://docs.ag-ui.com/concepts/state) and
+[LangGraph persistence](https://docs.langchain.com/oss/python/langgraph/persistence).
+
+## Employee assistant
+
 The application answers natural-language questions against the fixed SQLite
 table `data` while keeping schema knowledge, prompts, orchestration, database
 access, and presentation separate.
@@ -65,6 +93,6 @@ does not add a model call, and leaves the `/ask` response contract unchanged.
   Callers may reuse a client for multiple requests within a context. There is no
   global cached client. Entra token acquisition/refresh uses the SDK callback.
 - Generated SQL remains untrusted and passes through database guardrails.
-- Each request is stateless; no conversation history is stored.
+- Each employee `/ask` request is stateless.
 
 See the accepted [architecture decision](adr/0001-schema-guided-read-only-sql.md).

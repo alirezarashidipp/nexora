@@ -1,8 +1,28 @@
 # Project State
 
-Last updated: 2026-11-17
+Last updated: 2026-11-22
 
 ## Status
+
+The desktop landing page now supports **Ask Once → Discover → Answer Here →
+Continue**. The catalogue has ten dashboards and five prebuilt fictional databases,
+with eight columns per table and up to 20 rows per table. One bounded LangGraph
+checkpoint per conversation holds the original question or its private reference,
+recent questions, dashboard selection, filters and source names. AG-UI streams
+the current view, SQL and evidence to the browser.
+
+The four suggested question patterns and city comparisons use the real SQLite
+assets offline. A versioned language-planning prompt handles other wording using
+catalogue measures. Unavailable measures and ambiguous requests need clarification.
+Dashboard links are placeholders until configured. The initial release uses one
+server process, with restart and least-recently-used eviction clearing memory.
+
+On 2026-11-22, 46 Python tests passed, including reproducible fixture contents,
+exact schema contracts, thread isolation, bounded checkpoints and evidence
+queries. A desktop Chrome walkthrough covered dashboard selection, Answer Here,
+the Bristol/London comparison, reload, a fresh thread and a three-database
+weather query. General language interpretation was exercised with mocked model
+responses. The JavaScript checks, database self-check and Compose configuration passed.
 
 The schema-guided SQL application is runnable locally and through Docker. A
 user can ask about the fixed SQLite table `data`, receive validation or clarification, inspect
@@ -51,7 +71,7 @@ the generated SQL, and get an answer grounded in the database result.
 - GitHub Actions is configured to run deterministic checks without calling
   OpenAI.
 
-## Current data contract
+## Employee data contract
 
 - Database asset: `main_datawarehouse.db`
 - Fixed table: `data`
@@ -63,10 +83,10 @@ The application and container never create, migrate, or seed it.
 
 ## Deliberate limits
 
-- The application exposes only the fixed SQLite table `data`.
+- The employee workspace exposes only the fixed SQLite table `data`.
 - There is no migration system; schema changes require database recreation or
   an externally managed database.
-- Each request is independent; there is no conversation memory.
+- Each `/ask` request is independent. The separate `/ag-ui` route maintains thread memory.
 - No application maximum question length or result-row cap is imposed. All query
   rows go to the answer model; provider context limits still apply.
 - The frontend targets desktop widths of 1180px and above; it has no mobile

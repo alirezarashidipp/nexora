@@ -61,6 +61,13 @@ docker run --rm --env-file .env -e DATABASE_PATH=/data/external.db --mount "type
 
 ## Production boundary
 
+Run the conversation demo with one Uvicorn worker. Its LangGraph
+`InMemorySaver` is process-local and is cleared by restart or development reload.
+The 64 most recently used threads can be restored. The service reads the five
+prebuilt database files in `demo_data/` and never provisions them on startup.
+To override dashboard links in Docker, mount a JSON file read-only and set
+`NEXORA_DASHBOARD_URLS_FILE` to its in-container path.
+
 The image runs Uvicorn as a non-root user, but the application is not ready for
 an untrusted public network. Add authentication, rate limiting, request
 timeouts, safe operational logging, and TLS at the deployment edge first.

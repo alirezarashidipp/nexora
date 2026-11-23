@@ -2,6 +2,7 @@ import sys
 
 from app.api import app
 from app.database import describe_table, execute_sql
+from app.demo_queries import check_demo_data
 from app.schema import TABLE_NAME
 
 
@@ -11,7 +12,8 @@ def self_check() -> None:
     assert execute_sql(
         f'SELECT COUNT(*) AS total FROM "{TABLE_NAME}"'
     )[0]["total"] >= 0
-    print("Offline database self-check passed; no live LLM request was made.")
+    check_demo_data()
+    print("Offline database self-check passed for the employee table and the five conversation sources.")
 
 
 if __name__ == "__main__":
