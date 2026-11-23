@@ -274,7 +274,7 @@ class ContractTests(unittest.TestCase):
             "column.name",
             "column.description",
             "column.possible_values",
-            "data.examples",
+            "showFields",
         ):
             self.assertIn(token, script)
         self.assertRegex(

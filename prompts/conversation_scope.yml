@@ -1,6 +1,8 @@
-version: 2
+version: 3
 template: |
-  Choose the smallest source scope for the user's actual question in a fictional office portfolio.
+  Choose the smallest source scope for the user's actual question in the office portfolio.
+  If the user requests an office outside office_locations, explain the coverage gap and ask
+  which covered office to use. Return no base. Never drop or replace the requested location.
   The inventory contains table topics and directed, approved many-to-one paths, not column schemas.
   Return one base table and the ordered join IDs needed, starting at that table.
   Respect each relationship's meaning (home office versus office visited) and all prerequisites.

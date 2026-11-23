@@ -1,0 +1,139 @@
+- dashboard_id: workforce
+  title: Workforce footprint
+  description: Active employees and contracted capacity by home office.
+  keywords:
+  - employees
+  - workforce
+  - staff
+  - headcount
+  - fte
+  kpi_tags:
+  - Active employees
+  - Active workforce capacity
+  business_purpose: Plan staffing against contracted workforce capacity.
+  supported_questions:
+  - How many active people are based at each office?
+  - How much contracted capacity does each team have?
+  dimensions:
+  - home office
+  - team
+  - role
+  source_tables:
+  - workforce.employees
+  - locations.offices
+  dashboard_url: null
+- dashboard_id: estate
+  title: Office estate
+  description: Available desks and contracted monthly rent by office.
+  keywords:
+  - seats
+  - seat capacity
+  - desks
+  - rent
+  kpi_tags:
+  - Seat capacity
+  - Floor area
+  - Monthly rent
+  business_purpose: Compare physical space and lease commitments across offices.
+  supported_questions:
+  - Which offices have the most desks?
+  - What is the monthly rent by office?
+  dimensions:
+  - office
+  source_tables:
+  - locations.offices
+  dashboard_url: null
+- dashboard_id: portfolio
+  title: Portfolio staffing
+  description: Delivery capacity and unfilled demand on projects.
+  keywords:
+  - projects
+  - portfolio
+  - staffing gap
+  - shortfall
+  - assigned
+  kpi_tags:
+  - Project staffing gap
+  - Assigned capacity
+  business_purpose: Identify projects with unfilled staffing requirements.
+  supported_questions:
+  - Which projects have the largest staffing shortfall?
+  - How much capacity is assigned by lead office?
+  dimensions:
+  - project
+  - lead office
+  - delivery team
+  source_tables:
+  - portfolio.portfolio_projects
+  - locations.offices
+  dashboard_url: null
+- dashboard_id: hiring
+  title: Hiring pipeline
+  description: Open requisition capacity by hiring office and project.
+  keywords:
+  - hiring
+  - vacancies
+  - recruitment
+  - open fte
+  kpi_tags:
+  - Open hiring capacity
+  business_purpose: Track open hiring demand by role and location.
+  supported_questions:
+  - How much open hiring capacity is requested for each project?
+  - Which offices need analysts?
+  dimensions:
+  - hiring office
+  - project
+  - role
+  source_tables:
+  - portfolio.hiring_requests
+  - locations.offices
+  - portfolio.portfolio_projects
+  dashboard_url: null
+- dashboard_id: occupancy
+  title: Office occupancy
+  description: Daily attendance and peak utilisation relative to seats.
+  keywords:
+  - occupancy
+  - utilisation
+  - utilization
+  - onsite headcount
+  - attendance
+  kpi_tags:
+  - Recorded attendance
+  - Peak seat utilisation
+  business_purpose: Understand how intensively offices use available desks.
+  supported_questions:
+  - Which office has the highest peak seat utilisation?
+  - How does daily attendance vary by office?
+  dimensions:
+  - office
+  - recorded day
+  source_tables:
+  - facilities.office_daily_metrics
+  - locations.offices
+  dashboard_url: null
+- dashboard_id: cost
+  title: Workplace costs
+  description: Metered energy and operating costs per recorded office-day.
+  keywords:
+  - energy
+  - electricity
+  - cost
+  - costs
+  - kwh
+  kpi_tags:
+  - Energy use
+  - Energy cost
+  - Operating cost
+  business_purpose: Monitor office energy consumption and recorded operating expenditure.
+  supported_questions:
+  - How much electricity did each office use?
+  - What was the daily operating cost by office?
+  dimensions:
+  - office
+  - recorded day
+  source_tables:
+  - facilities.office_daily_metrics
+  - locations.offices
+  dashboard_url: null

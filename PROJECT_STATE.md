@@ -5,14 +5,14 @@ Last updated: 2026-11-23
 ## Status
 
 The desktop workspace supports **Ask Once → Discover → Choose → Investigate → Verify → Continue**.
-Every discovery asks the language model to rank the ten metadata entries. Up to three
+Every discovery asks the language model to rank the six published YAML entries. Up to three
 cards explain exact or related coverage. A configured link opens the dashboard and
 Answer Here retains the original question. The router opens no SQLite connections.
 Keyword fallback applies only when the language service is unavailable. Invalid model
 rankings and valid empty results have distinct states.
 
 Answer Here routes every question through model-based source selection and planning.
-Suggested questions use the same path as typed questions. The planner can choose a
+Every typed question enters the same workflow. The planner can choose a
 defined business metric or compose a scoped query over individual fields. A clarification
 can resolve a missing baseline or an unsupported request. SQLite supplies the displayed
 rows, SQL and bound parameters. The five synthetic databases cover London, Manchester,
@@ -20,8 +20,7 @@ Dubai, Mumbai, Bengaluru and Shanghai, with ten tables and at most 20 rows each.
 
 The AG-UI LangGraph adapter streams node progress and shared UI snapshots from the same
 checkpointed graph that holds conversation memory. One bounded checkpoint per thread
-retains business context. A server restart clears it. Dashboard destinations remain
-placeholders unless configured.
+retains business context. A server restart clears it. All six dashboard destinations start unconfigured.
 
 Regression tests use the OpenAI SDK with a simulated HTTP provider. They exercise
 paraphrases, novel field-level questions, comparisons, incremental schema loading, and
@@ -29,11 +28,14 @@ step delivery over an actual HTTP stream while the simulated provider is still w
 This verifies integration and evidence on the fixtures. Live provider relevance and
 planning quality have not been measured on this branch.
 
-On 23 November 2026 the full suite passed 60 Python tests. The database self-check,
-JavaScript checks and Compose validation also passed. A desktop Chrome walkthrough
-used a simulated provider and the real application to verify recommendation reasons,
-configured navigation, missing links, Answer Here after a reload, and a two-city
-comparison whose chart matched the SQL evidence. It also exercised clarification.
+On 23 November 2026 all 63 Python tests, the database self-check, JavaScript checks,
+dependency check and Compose configuration validation passed. Headless desktop Chrome
+exercised the Employee workspace with a controlled provider response and real backend.
+It verified the old route redirects, discovery opens no field browser, Dubai headcount
+returns two employees, a comparison with London produces two chart rows, and a page
+reload preserves the thread. A subsequent dashboard search carried both office filters.
+The live connection check stopped before sending a request because the OpenAI API key
+was unset.
 
 The schema-guided SQL application is runnable locally and through Docker. A
 user can ask about the fixed SQLite table `data`, receive validation or clarification, inspect
@@ -62,15 +64,10 @@ the generated SQL, and get an answer grounded in the database result.
 - The frontend uses a light-only, desktop HSBC Insight Studio layout with a
   transparent faceted ruby-crystal HSBC hero illustration, architectural
   backdrop, and system fonts.
-- The frontend renders expandable field descriptions and four suggested
-  question cards from `EXAMPLE_QUESTIONS` through `GET /schema`.
-- A View SQL action opens the generated query and raw rows after an answer.
-- Workspace and field search filter the live schema and suggested questions;
-  fields support grid/list views and insertion into the question.
-- Recent insights shows three explicitly labelled, static demo examples. It
-  does not store or display real question history.
-- The frontend automatically renders a native Bar chart after compatible
-  two-column results and offers Pie when supported.
+- Employee workspace serves discovery, Answer Here, chart, SQL evidence and thread history
+  at `/`, `/employees` and the redirect from `/conversation`.
+- The published dashboard catalogue lives in `app/dashboards.yml`. The page opens
+  with an empty question field. The employee directory field browser loads on request.
 - Standard-library tests cover API/schema contracts, workflow routing,
   database guardrails, result comparison, answer inputs, and chart eligibility.
 - An opt-in DeepEval suite measures live question classification, generated SQL

@@ -1,41 +1,32 @@
 # Nexora
 
-Open the desktop app at <http://127.0.0.1:8000> for dashboard discovery and
-threaded analysis. The employee workspace is available at `/employees`.
+Open the [Employee workspace](http://127.0.0.1:8000/employees). Ask a question,
+review the matching dashboards, or choose **Answer Here** to investigate in place.
+Expand **SQL and evidence** to inspect the sources, parameters and returned rows.
 
-## Try a conversation
-
-With a configured OpenAI or Azure OpenAI provider:
-
-1. Ask **How many active employees are in Bengaluru?**
-2. Read the reason on the **Workforce footprint** card. Choose **Open dashboard** if a destination is configured, or **Answer Here** to investigate the original question. The synthetic data contains one active employee in Bengaluru.
-3. Ask **Compare it with London.** The same metric gives Bengaluru 1 and London 2.
-4. Open **View chart** for the two-city comparison or **SQL and evidence** for the query, parameters and rows.
-
-Every discovery sends the question and compact metadata for all ten dashboards to the
+Every discovery sends the question and compact metadata for all dashboards listed in `app/dashboards.yml` to the
 configured language model. Each recommendation explains whether the published view
 provides an **Exact answer** or **Related information**. Discovery returns up to three
 cards and opens zero SQLite connections. Only provider unavailability activates
 **Keyword fallback**. A valid empty ranking or a rejected model result still offers
-**Answer Here**. Analytical turns require a working model, including the suggested examples.
+**Answer Here**. Analytical turns require a working model.
 
 Each new conversation gets its own thread. One server process holds up to 64 conversations
 in RAM. Restarting it clears their memory.
 
-The catalogue describes ten fictional dashboards. Five prebuilt SQLite databases provide the analytical evidence.
+The catalogue publishes six dashboard definitions. Each entry records its business purpose, supported questions, KPIs, dimensions, qualified source tables and optional HTTPS destination. All six links start unconfigured. Five prebuilt SQLite databases provide the analytical evidence.
 For the exact schema, link configuration and reproducible build see
 [the database guide](docs/database.md). For the streaming contract see
 [the conversation API](docs/api.md#post-ag-ui).
 
-## Employee SQL assistant
+## Stateless employee API (`POST /ask`)
 
 Ask a question in plain English, turn it into guarded SQLite, and return an
 answer grounded in the query result.
 
 This schema-guided SQL application keeps the full path visible: FastAPI
 receives the question, LangGraph validates and completes it, OpenAI or Azure OpenAI produces structured
-output, SQLite runs a read-only query, and a small HTML/CSS/JavaScript frontend
-shows the result.
+output, SQLite runs a read-only query, and the API returns the result.
 
 ## What it does
 
@@ -44,8 +35,6 @@ shows the result.
 3. Generates one SQLite `SELECT` query.
 4. Applies application and SQLite-level read-only guardrails.
 5. Answers from the returned rows only.
-6. Automatically renders a Bar chart for compatible results and offers Pie when
-   supported.
 
 Try questions such as:
 

@@ -8,7 +8,7 @@ from contextlib import closing
 from datetime import date, timedelta
 from pathlib import Path
 
-from app.catalogue import CITIES, DASHBOARDS, DEMO_DIR, ROLES, TEAMS, dashboard_metadata, dashboard_sources
+from app.catalogue import CITIES, DEMO_DIR, ROLES, TEAMS, published_dashboards
 from app.schema import DEMO_COLUMNS, DEMO_KEYS, OFFICES
 
 
@@ -64,10 +64,11 @@ def sample_rows() -> dict[str, list]:
         rows["portfolio.portfolio_projects"].append((pid, name, team, office, assigned+gap, assigned, due, ("High","Medium","Low")[i % 3]))
         rows["portfolio.hiring_requests"].append((f"H{i+1:02}", pid, team, office, ROLES[i % 3], gap,
                                                  "2026-12-01", "Open" if gap else "Filled"))
-    for key in DASHBOARDS:
-        card = dashboard_metadata(key)
+    published_cards = published_dashboards()
+    for key, card in published_cards.items():
+        sources = card["source_tables"]
         rows["locations.dashboard_catalog"].append((key, card["title"], card["description"], json.dumps(card["kpi_tags"]),
-            json.dumps(dashboard_sources(key)), f"https://example.org/dashboards/{key}", "placeholder", json.dumps(card["keywords"])))
+            json.dumps(sources), "", "placeholder", json.dumps(card["keywords"])))
     return rows
 
 

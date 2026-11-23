@@ -7,9 +7,9 @@ The Python `ag-ui-langgraph` adapter runs the same compiled LangGraph graph that
 `InMemorySaver`. The `ag-ui-protocol` event encoder streams the adapter's run, node
 and shared-state events over SSE. The browser shows progress as nodes run.
 
-1. **Discover dashboards.** The model sees all ten published entries with their IDs, titles,
-   descriptions, keywords, KPI labels and views, plus the portfolio's office locations.
-   The catalogue is available in memory. Discovery never opens SQLite. The model ranks by
+1. **Discover dashboards.** The model sees the six published entries with their IDs, titles,
+   business purposes, supported questions, KPI labels, dimensions, keywords and qualified source names. It also receives office coverage and bounded thread context. Destination URLs, column definitions and SQL rows stay out of discovery.
+   The catalogue is read from `app/dashboards.yml`. Discovery never opens SQLite. The model ranks by
    intent and identifies a supporting KPI, exact or partial coverage and the reason.
    Nexora keeps the first three distinct entries that pass validation, in model order.
    An unavailable language service enables keyword fallback. A malformed ranking, refusal
@@ -18,7 +18,7 @@ and shared-state events over SSE. The browser shows progress as nodes run.
    that detail when choosing Answer Here.
 2. **Select sources.** Answer Here restores the original wording. The model sees table topics,
    approved relationship names and business context to choose a base and an ordered join path.
-   A dashboard recommendation can guide the choice. A question with no recommendation can
+   An explicitly selected dashboard can guide the choice. An unselected recommendation supplies no default source. A question with no recommendation can
    still use available data.
 3. **Plan the query.** Only selected table definitions and join keys enter the planning request.
    Follow-ups carry the recent analyses, existing filters and outstanding clarification.

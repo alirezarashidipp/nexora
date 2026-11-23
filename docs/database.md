@@ -31,20 +31,13 @@ cardinalities and publishes the directory only after validation. Stop the servic
 before replacing fixture files. `python main.py --check` validates the shipped set.
 The 20-row ceiling applies to fixture provisioning. Queries return every matching group.
 
-The in-memory discovery catalogue and the offline `locations.dashboard_catalog` fixture
-share the same published metadata definitions. The fixture contains example.org placeholders.
+Discovery reads the published dashboard descriptions from `app/dashboards.yml`. Edit the list to change the number of published dashboards. The offline fixture builder also reads this file for its dashboard descriptions. Each qualified source identifies both the database and the table. The shipped fixture contains six metadata rows and empty destinations.
 The workspace displays a link only when its destination has been configured. An absent or
 unusable destination leaves the recommendation and Answer Here available.
-To activate real links, set `NEXORA_DASHBOARD_URLS_FILE` to a JSON file mapping
-any dashboard IDs to HTTPS URLs. This entry configures the workforce dashboard.
+Set `dashboard_url` in a YAML entry to its verified HTTPS destination. Deployments may override individual destinations through the existing `NEXORA_DASHBOARD_URLS_FILE` JSON mapping. An empty override disables a link. Reserved example domains are rejected. Link validation checks the URL format, not authentication or reachability.
 
-```json
-{"workforce": "https://reports.example.org/workforce"}
-```
-
-The IDs are `workforce`, `schedule`, `visits`, `estate`, `portfolio`, `hiring`,
-`occupancy`, `cost`, `weather` and `closures`. Configured links appear in the
-workspace. The configured status means a destination URL has been supplied.
+The published IDs are `workforce`, `estate`, `portfolio`, `hiring`, `occupancy` and `cost`.
+The independent analytical catalogue still supports schedules, badge visits, weather and closures through Answer Here.
 
 ## Existing-file contract
 

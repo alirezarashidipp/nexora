@@ -32,7 +32,7 @@ app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 @app.get("/", response_class=FileResponse)
 def index():
-    return STATIC_DIR / "conversation.html"
+    return STATIC_DIR / "index.html"
 
 
 @app.get("/employees", response_class=FileResponse)

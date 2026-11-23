@@ -75,7 +75,6 @@ def memory_vocabulary() -> set[str]:
         *CITIES, *ROLES, *TEAMS, *DEMO_EXAMPLES,
     ]
     for report in DASHBOARDS.values():
-        phrases.extend((report.title, report.description, *report.keywords, *report.views))
         for measure in report.measures.values():
             phrases.extend((measure.label, measure.definition, *measure.aliases))
     for columns in DEMO_COLUMNS.values():
@@ -108,9 +107,9 @@ def question_summary(question, matches):
     exact = memory_question(question)
     if exact:
         return exact
-    topics = [DASHBOARDS[key].title for key in matches]
+    topics = list(matches)
     topics.extend(city for city in CITIES if re.search(rf"\b{city}\b", question, re.I))
-    return " · ".join(topics) or "Question about the demo data"
+    return " · ".join(topics) or "Workplace analysis"
 
 
 def seal_question(thread_id, question):
@@ -149,8 +148,8 @@ def prepare_turn(memory: Memory, runtime: Runtime[Turn]) -> dict:
                 work["notice"] = "A dataset for the previous answer is unavailable. You can still ask a follow-up."
         return {}
     if action == "discover":
-        if memory.get("stage"):
-            raise ValueError("Start a new conversation for a new discovery.")
+        if memory.get("stage") == "discover":
+            raise ValueError("Choose Answer Here before starting another discovery.")
         return {}
     if not memory.get("stage"):
         raise ValueError("This conversation has expired. Start a new question.")
@@ -165,8 +164,6 @@ def prepare_turn(memory: Memory, runtime: Runtime[Turn]) -> dict:
     if action == "answer_here":
         question = original_wording(memory, question, turn["thread_id"], turn["original_token"])
     selected = memory.get("selected", "")
-    if not selected and memory["matches"]:
-        selected = memory["matches"][0]
     work["question"] = question
     context = context_for_question(question, selected, memory)
     if action == "answer_here":
@@ -200,7 +197,11 @@ def prepare_turn(memory: Memory, runtime: Runtime[Turn]) -> dict:
 def discover_dashboards(memory: Memory, runtime: Runtime[Turn]) -> dict:
     turn = runtime.context
     question = turn["question"]
-    ranking, mode, prompt = discover(question, turn["dashboards"])
+    last_plan = memory.get("plan", {}).get("metric_plan", {})
+    context = {"recent_questions": memory.get("history", []),
+               "selected_dashboard": memory.get("selected") or None,
+               "offices": last_plan.get("cities", [])}
+    ranking, mode, prompt = discover(question, turn["dashboards"], context)
     if prompt:
         prompt = memory_question(prompt) or "Which measure, office or time period should I use?"
     details = {}
@@ -214,7 +215,8 @@ def discover_dashboards(memory: Memory, runtime: Runtime[Turn]) -> dict:
     matches = list(details)
     remembered = memory_question(question)
     return dict(original_question=remembered, original_digest=fingerprint(question), needs_original=not remembered,
-                history=[question_summary(question, matches)], selected="", matches=matches, match_details=details,
+                history=[*memory.get("history", []), question_summary(question, matches)][-HISTORY_SIZE:],
+                discovery_detail="", pending="", pending_digest="", notice="", selected="", matches=matches, match_details=details,
                 discovery_mode=mode, discovery_prompt=prompt, stage="discover")
 
 
@@ -311,6 +313,8 @@ def public_state(memory, turn):
     dashboards = {item["dashboard_id"]: item for item in turn["dashboards"]}
     matches = []
     for key in memory.get("matches", []):
+        if key not in dashboards:
+            continue
         item = dashboards[key]
         card = {field: item[field] for field in ("dashboard_id", "title", "description", "dashboard_url", "url_status")}
         card.update(memory.get("match_details", {}).get(key, {"coverage": "related", "reason": item["description"]}))

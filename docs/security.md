@@ -28,7 +28,7 @@ independent SQL and SQLite controls.
 Discovery sends the question and public business metadata to the provider, including
 published KPIs, views and office coverage. It never reads a SQLite file or sends SQL,
 source definitions, result rows or destination URLs. It verifies each dashboard ID and
-supporting KPI against the catalogue and checks that the coverage classification agrees
+supporting KPI and cited dimensions against the catalogue, rejects exact matches with a model-identified uncovered office, and checks that the coverage classification agrees
 with the stated gap. Only bounded business-safe reasons enter memory. For private
 wording the server describes the model-selected KPI and gap using catalogue terms.
 For analysis the server validates the selected base table and every step of a reviewed

@@ -5,8 +5,7 @@ is available at <http://127.0.0.1:8000/docs>.
 
 ## `GET /`
 
-Returns the conversation workspace. `GET /conversation` opens the same page.
-`GET /employees` opens the original employee workspace.
+Returns the Employee workspace. `GET /employees` serves the same page. The old `GET /conversation` redirects to `/employees`.
 
 ## POST /ag-ui
 
@@ -28,7 +27,7 @@ without reopening analytical sources.
 
 | Action | Input | Result |
 | --- | --- | --- |
-| `discover` | First question in a new thread | Ranked dashboard metadata |
+| `discover` | First question, or another dashboard search after analysis in the same thread | Ranked dashboard metadata |
 | `select` | Recommended ID in `state.selected` (also accepts `forwardedProps.dashboard`) | Synchronised selection |
 | `answer_here` | Same thread, original message or tab token when required | Answer to the original question or a clarification |
 | `followup` | New user message after choosing Answer Here | Contextual analysis or a clarification |

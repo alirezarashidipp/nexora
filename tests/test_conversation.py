@@ -29,8 +29,8 @@ from build_demo_data import build_databases
 def model_match(key, coverage="exact", gap="none", reason=None):
     report = DASHBOARDS[key]
     kpi = next(iter(report.measures.values())).label
-    return dict(dashboard_id=key, coverage=coverage, kpi=kpi, gap=gap,
-                reason=reason or report.description)
+    return dict(dashboard_id=key, coverage=coverage, kpi=kpi, gap=gap, dimensions=[], requested_offices=[],
+                reason=reason or next(card["description"] for card in read_dashboards() if card["dashboard_id"] == key))
 
 
 class FixturesTest(unittest.TestCase):
@@ -89,7 +89,7 @@ class FixturesTest(unittest.TestCase):
                 self.assertAlmostEqual(row[1], capacity.fetchone()[0])
 
     def test_all_catalogued_measures_and_optional_joins(self):
-        self.assertEqual(len(read_dashboards()), 10)
+        self.assertEqual(len(read_dashboards()), 6)
         for key, report in DASHBOARDS.items():
             for metric in report.measures:
                 with self.subTest(metric=metric):
@@ -139,18 +139,21 @@ class FixturesTest(unittest.TestCase):
     def test_configured_dashboard_urls(self):
         with tempfile.TemporaryDirectory() as tmp:
             config = Path(tmp) / "urls.json"
-            config.write_text(json.dumps({"workforce": "https://example.org/custom"}))
+            config.write_text(json.dumps({"workforce": "https://reports.internal/custom"}))
             with patch.dict(os.environ, {"NEXORA_DASHBOARD_URLS_FILE": str(config)}):
                 result = {r["dashboard_id"]: r for r in read_dashboards()}
                 self.assertEqual(result["workforce"]["url_status"], "configured")
-                self.assertEqual(result["workforce"]["dashboard_url"], "https://example.org/custom")
+                self.assertEqual(result["workforce"]["dashboard_url"], "https://reports.internal/custom")
                 self.assertEqual(result["estate"]["url_status"], "placeholder")
                 self.assertIsNone(result["estate"]["dashboard_url"])
-                config.write_text(json.dumps({"workforce": "file:///unknown", "estate": "https://example.org/estate"}))
+                config.write_text(json.dumps({"workforce": "https://reports.example.org/workforce"}))
+                placeholder = next(card for card in read_dashboards() if card["dashboard_id"] == "workforce")
+                self.assertIsNone(placeholder["dashboard_url"])
+                config.write_text(json.dumps({"workforce": "file:///unknown", "estate": "https://reports.internal/estate"}))
                 cards = {r["dashboard_id"]: r for r in read_dashboards()}
                 self.assertEqual(cards["workforce"]["url_status"], "unavailable")
                 self.assertIsNone(cards["workforce"]["dashboard_url"])
-                self.assertEqual(cards["estate"]["dashboard_url"], "https://example.org/estate")
+                self.assertEqual(cards["estate"]["dashboard_url"], "https://reports.internal/estate")
                 config.write_text("unreadable URL mapping")
                 self.assertTrue(all(r["url_status"] == "unavailable" for r in read_dashboards()))
 
@@ -239,10 +242,11 @@ class ConversationTest(unittest.TestCase):
             self.assertEqual(self.turn("select", state={"selected": "workforce"})["selected"], "workforce")
             self.assertEqual(self.turn("restore")["dashboards"], discovery["dashboards"])
         sent = self.requests[0][1]
-        self.assertEqual(set(sent), {"question", "catalogue", "office_locations"})
-        self.assertEqual(len(sent["catalogue"]), 10)
+        self.assertEqual(set(sent), {"question", "catalogue", "office_locations", "conversation_context"})
+        self.assertEqual(len(sent["catalogue"]), 6)
         for entry in sent["catalogue"]:
-            self.assertEqual(set(entry), {"dashboard_id", "title", "description", "keywords", "kpi_tags", "views"})
+            self.assertEqual(set(entry), {"dashboard_id", "title", "description", "keywords", "kpi_tags", "dimensions",
+                                          "business_purpose", "supported_questions", "source_tables"})
         self.scope("workforce.employees", "employee_office")
         self.metric("employees", ["Dubai"])
         result = self.turn("answer_here", "Other question", state={"selected": "hiring", "plan": {}})
@@ -266,6 +270,69 @@ class ConversationTest(unittest.TestCase):
         self.assertEqual(self.turn("restore"), comparison)
         self.assertEqual(self.turn("restore", thread=str(uuid4()))["stage"], "new")
 
+    def test_workspace_routes_share_one_question_form(self):
+        html = self.client.get("/employees").text
+        for path in ("/", "/conversation"):
+            self.assertEqual(self.client.get(path).text, html)
+        self.assertIn('id="answer-here"', html)
+        self.assertEqual(self.client.get("/conversation", follow_redirects=False).headers["location"], "/employees")
+        self.assertIn("synthetic workplace data", html)
+        self.assertEqual(html.count("<form"), 1)
+        for removed in ('href="/conversation"', 'id="suggestions"', 'demo-badge'):
+            self.assertNotIn(removed, html)
+
+    def test_discovery_uses_current_yaml_and_clarifies_uncovered_office(self):
+        question = "How many people are based in Delhi?"
+        card = dict(dashboard_id="directory", title="Team directory", description="Headcount by office.",
+                    keywords=["staff"], dimensions=["office"], kpi_tags=["Headcount"],
+                    business_purpose="Locate staff", supported_questions=["How many staff work here?"],
+                    source_tables=["workforce.employees"], dashboard_url="https://reports.internal/directory")
+        self.replies.append(dict(clarification=None, matches=[dict(dashboard_id="directory",
+            coverage="related", kpi="Headcount", gap="scope", dimensions=["office"], requested_offices=["Delhi"], reason="Shows headcount by office.")]))
+        self.replies.append(dict(base=None, joins=[], clarification="Delhi is outside the office coverage. Which covered office should I use?"))
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dashboards.yml"
+            path.write_text(json.dumps([card]), encoding="utf-8")
+            with patch("app.catalogue.CATALOGUE_PATH", path), patch("sqlite3.connect", side_effect=AssertionError):
+                discovery = self.turn("discover", question)
+                expected = {key: value for key, value in card.items() if key != "dashboard_url"}
+                self.assertEqual(self.requests[0][1]["catalogue"], [expected])
+                self.assertEqual(discovery["dashboards"][0]["dashboard_url"], card["dashboard_url"])
+                self.assertEqual(discovery["dashboards"][0]["coverage"], "related")
+                result = self.turn("answer_here", question)
+                self.assertEqual(self.requests[-1][1]["original_question"], question)
+                self.assertNotIn("Delhi", self.requests[-1][1]["office_locations"])
+                self.assertIn("Delhi is outside", result["notice"])
+                self.assertEqual(result["stage"], "clarify")
+                self.assertIsNone(result["evidence"])
+
+    def test_rediscover_in_thread_then_analyse_independent_sources(self):
+        first = "How many active employees are in Dubai?"
+        self.replies.append(dict(clarification=None, matches=[model_match("workforce")]))
+        self.turn("discover", first)
+        self.scope("workforce.employees", "employee_office")
+        self.metric("employees", ["Dubai"])
+        self.turn("answer_here")
+        self.assertIsNone(self.requests[-1][1]["selected_dashboard"])
+
+        question = "How warm was it there on average?"
+        self.replies.append(dict(clarification=None, matches=[model_match("occupancy", "related", "measure")]))
+        with patch("sqlite3.connect", side_effect=AssertionError("Discovery opened SQLite")):
+            events = self.events("discover", question)
+        self.assertEqual([e["stepName"] for e in events if e["type"] == "STEP_STARTED"],
+                         ["prepare_turn", "discover_dashboards"])
+        context = self.requests[-1][1]["conversation_context"]
+        self.assertEqual(context["recent_questions"], [first])
+        self.assertEqual(context["offices"], ["Dubai"])
+        self.scope("external.weather_daily")
+        self.fields([("weather_daily.temp_c", "avg")], [("weather_daily.city_code", "=", ["DXB"])])
+        answer = self.turn("answer_here", question)
+        self.assertEqual(self.requests[-1][1]["original_question"], question)
+        self.assertIsNone(self.requests[-1][1]["selected_dashboard"])
+        self.assertEqual(answer["evidence"]["sources"], ["external.weather_daily"])
+        self.assertEqual(answer["evidence"]["parameters"], ["DXB"])
+        self.assertEqual(len(answer["history"]), 2)
+
     def test_paraphrases_can_match_without_any_keyword_hit(self):
         catalog = read_dashboards()
         for question, match in (("Who is on our payroll?", "workforce"),
@@ -284,14 +351,16 @@ class ConversationTest(unittest.TestCase):
         self.replies.append({"clarification": None, "matches": [
             {**model_match("estate"), "dashboard_id": "unknown"}, first, first,
             {**model_match("occupancy"), "kpi": "unpublished KPI"},
-            model_match("schedule", "exact", "forecast"),
-            model_match("visits"), model_match("estate"), model_match("workforce"),
+            model_match("portfolio", "exact", "forecast"),
+            {**model_match("estate"), "dimensions": ["surname"]},
+            {**model_match("workforce"), "requested_offices": ["Delhi"]},
+            model_match("hiring"), model_match("estate"), model_match("workforce"),
         ]})
         with patch("sqlite3.connect", side_effect=AssertionError), \
              patch("app.conversation_plan.find_dashboards", side_effect=AssertionError):
             view = self.turn("discover", "Help me understand the cost of using our buildings.")
         self.assertEqual(view["discovery_mode"], "semantic")
-        self.assertEqual([c["dashboard_id"] for c in view["dashboards"]], ["cost", "visits", "estate"])
+        self.assertEqual([c["dashboard_id"] for c in view["dashboards"]], ["cost", "hiring", "estate"])
         reason = view["dashboards"][0]["reason"]
         self.assertIn("energy use", reason)
         self.assertIn("separate analysis", reason)
@@ -334,7 +403,7 @@ class ConversationTest(unittest.TestCase):
         self.assertEqual(len(examples), len(cases))
         for question, (report, metric, city) in zip(examples, cases):
             thread = str(uuid4())
-            self.replies.append({"clarification": None, "matches": [model_match(report)]})
+            self.replies.append({"clarification": None, "matches": [] if report == "weather" else [model_match(report)]})
             self.scope(DASHBOARDS[report].table, *DASHBOARDS[report].joins)
             self.metric(metric, [city])
             self.turn("discover", question, thread=thread)
@@ -442,7 +511,7 @@ class ConversationTest(unittest.TestCase):
 
     def test_missing_dataset_still_allows_discovery_and_a_retry(self):
         first = "What is the average temperature in Shanghai?"
-        self.replies.append({"clarification": None, "matches": [model_match("weather", "related", "measure")]})
+        self.replies.append({"clarification": None, "matches": []})
         with tempfile.TemporaryDirectory() as tmp, patch("app.catalogue.DEMO_DIR", Path(tmp)):
             discovery = self.turn("discover", first)
             with patch("app.conversation.choose_sources", side_effect=AssertionError):

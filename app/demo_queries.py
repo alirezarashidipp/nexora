@@ -104,7 +104,7 @@ def read_evidence(sql: str, parameters: list, tables: list[str], directory: Path
 
 def query_filters(report: Dashboard, plan: Plan, fields: dict) -> tuple[list, list]:
     if any(city not in CITIES for city in plan.cities):
-        raise ValueError("Which of the six demo offices should I use?")
+        raise ValueError("That office is outside the available data. Which covered office should I use?")
     if len(plan.cities) != len(set(plan.cities)):
         raise ValueError("Choose distinct cities to compare.")
     predicates = [report.condition] if report.condition else []
@@ -225,5 +225,7 @@ def check_demo_data(directory: Path = DEMO_DIR) -> None:
             if sites != set(CITIES.values()):
                 raise ValueError(f"Expected all six offices in {table}.")
         mappings = {r[0]: json.loads(r[1]) for r in db.execute("SELECT dashboard_id, source_tables_json FROM locations.dashboard_catalog")}
-        if mappings != {key: dashboard_sources(key) for key in DASHBOARDS}:
-            raise ValueError("Dashboard source mappings do not match the approved catalogue.")
+        for key, tables in mappings.items():
+            expected = dashboard_sources(key) if key in DASHBOARDS else []
+            if tables != expected:
+                raise ValueError("Dashboard source mappings do not match the approved catalogue.")

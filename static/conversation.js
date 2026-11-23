@@ -114,7 +114,7 @@ function renderState(snapshot) {
   if (state.evidence) renderEvidence(state.evidence);
   byId("notice").hidden = !state.notice;
   byId("notice").textContent = state.notice || "";
-  byId("suggestions").hidden = !fresh;
+  byId("search-again").hidden = state.stage !== "answer";
   byId("recent").hidden = fresh;
   byId("history").replaceChildren(...(state.history || []).map(q => element("li", q)));
   byId("composer-label").textContent = needsDetail ? state.discovery_clarification : (fresh ? "Your question" : "Continue the conversation");
@@ -162,7 +162,7 @@ async function sendTurn(action, text = "", dashboard = "", clarification = "") {
   const runId = retry?.signature === signature ? retry.runId : crypto.randomUUID();
   const previousState = state;
   retry = {signature, runId};
-  byId("run-status").textContent = action === "restore" ? "" : "Working…";
+  byId("run-status").textContent = "";
   const controls = document.querySelectorAll(".conversation button, .conversation input, #message");
   controls.forEach(control => { control.disabled = true; });
   try {
@@ -180,6 +180,14 @@ async function sendTurn(action, text = "", dashboard = "", clarification = "") {
       headers: {"Content-Type": "application/json", Accept: "text/event-stream"}, body: JSON.stringify(payload)});
     if (!response.ok) throw new Error("The server could not accept this turn.");
     await readEvents(response);
+    if (action === "discover") {
+      originalDraft = text;
+      if (!state.needs_original) {
+        originalToken = "";
+        sessionStorage.removeItem(tokenKey);
+      }
+      renderState(state);
+    }
     if (action === "followup" || action === "answer_here") {
       pendingDraft = state.needs_prior_question ? text : "";
     }
@@ -195,14 +203,18 @@ async function sendTurn(action, text = "", dashboard = "", clarification = "") {
   }
 }
 
+byId("message").addEventListener("keydown", event => {
+  if (event.key === "Enter" && (event.ctrlKey || event.metaKey)) {
+    event.preventDefault();
+    byId("conversation-form").requestSubmit();
+  }
+});
+
 byId("conversation-form").addEventListener("submit", event => {
   event.preventDefault();
   const text = byId("message").value.trim();
   if (!text || busy) return;
-  if (state.stage === "new") {
-    originalToken = "";
-    sessionStorage.removeItem(tokenKey);
-    originalDraft = text;
+  if (state.stage === "new" || event.submitter?.id === "search-again") {
     sendTurn("discover", text);
   } else if (state.stage === "discover") {
     if (state.discovery_clarification) sendTurn("answer_here", originalDraft || state.original_question, "", text);
@@ -237,17 +249,4 @@ byId("new-thread").addEventListener("click", () => {
   byId("message").focus();
 });
 
-async function start() {
-  await sendTurn("restore");
-  const response = await fetch("/conversation/examples");
-  if (!response.ok) return;
-  for (const text of await response.json()) {
-    const button = element("button", text);
-    button.addEventListener("click", () => {
-      byId("message").value = text;
-      byId("conversation-form").requestSubmit();
-    });
-    byId("example-list").append(button);
-  }
-}
-start().catch(() => { byId("run-status").textContent = "Could not load the suggested questions."; });
+sendTurn("restore");

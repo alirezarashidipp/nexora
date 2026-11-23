@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import NamedTuple
 from urllib.parse import urlsplit
 
+import yaml
+from pydantic import BaseModel, Field, ValidationError
+
 from .schema import CITIES, DEMO_COLUMNS, DEMO_KEYS
 
 DEMO_DIR = Path(__file__).resolve().parent.parent / "demo_data"
@@ -48,69 +51,54 @@ class Measure(NamedTuple):
 
 
 class Dashboard(NamedTuple):
-    title: str
-    description: str
-    keywords: tuple[str, ...]
     table: str
     joins: tuple[str, ...]
     measures: dict[str, Measure]
     date_column: str = ""
     condition: str = ""
-    views: tuple[str, ...] = ()
 
 
 DASHBOARDS = {
-    "workforce": Dashboard("Workforce footprint", "Active employees and contracted capacity by home office.",
-        ("employees", "workforce", "staff", "headcount", "fte"), "workforce.employees", ("employee_office",), {
+    "workforce": Dashboard("workforce.employees", ("employee_office",), {
             "employees": Measure("Active employees", "people", "Count distinct active workers by home office.", "COUNT(DISTINCT employees.employee_id)"),
             "workforce_fte": Measure("Active workforce capacity", "FTE", "Sum contracted FTE for active workers.", "SUM(employees.fte)"),
-        }, condition="employees.active = 1", views=("home office", "team", "role")),
-    "schedule": Dashboard("Weekly working patterns", "Planned onsite days from the agreed weekly schedule.",
-        ("schedule", "scheduled", "planned onsite", "hybrid"), "workforce.weekly_schedule", ("schedule_employee", "employee_office"), {
+        }, condition="employees.active = 1"),
+    "schedule": Dashboard("workforce.weekly_schedule", ("schedule_employee", "employee_office"), {
             "planned_days": Measure("Planned onsite days", "person-days", "Sum the five weekday flags per worker-week.", "SUM(mon + tue + wed + thu + fri)"),
-        }, "weekly_schedule.week_start", views=("home office", "schedule week")),
-    "visits": Dashboard("Badge activity", "Building entries by the office actually visited.",
-        ("badge", "visits", "entries"), "workforce.badge_visits", ("visit_office",), {
+        }, "weekly_schedule.week_start"),
+    "visits": Dashboard("workforce.badge_visits", ("visit_office",), {
             "visits": Measure("Badge visits", "visits", "Count individual visits at the visited office.", "COUNT(badge_visits.visit_id)"),
-        }, "badge_visits.visit_date", views=("visited office", "visit date")),
-    "estate": Dashboard("Office estate", "Available desks and contracted monthly rent by office.",
-        ("seats", "seat capacity", "desks", "rent"), "locations.offices", (), {
+        }, "badge_visits.visit_date"),
+    "estate": Dashboard("locations.offices", (), {
             "seats": Measure("Seat capacity", "seats", "Sum seats once per office.", "SUM(offices.seat_capacity)"),
             "floor_area": Measure("Floor area", "m²", "Sum internal floor area once per office.", "SUM(offices.floor_area_sqm)",
                                   ("floor space", "square metres", "square meters")),
             "rent": Measure("Monthly rent", "GBP/month", "Sum monthly leases once per office.", "SUM(offices.monthly_rent_gbp)"),
-        }, views=("office",)),
-    "portfolio": Dashboard("Portfolio staffing", "Delivery capacity and unfilled demand on projects.",
-        ("projects", "portfolio", "staffing gap", "shortfall", "assigned"), "portfolio.portfolio_projects", ("project_office",), {
+        }),
+    "portfolio": Dashboard("portfolio.portfolio_projects", ("project_office",), {
             "staffing_gap": Measure("Project staffing gap", "FTE", "Sum positive required minus assigned FTE per project.", "SUM(MAX(0, required_fte - assigned_fte))"),
             "assigned": Measure("Assigned capacity", "FTE", "Sum assigned FTE per project.", "SUM(assigned_fte)"),
-        }, "portfolio_projects.due_date", views=("project", "lead office", "delivery team")),
-    "hiring": Dashboard("Hiring pipeline", "Open requisition capacity by hiring office and project.",
-        ("hiring", "vacancies", "recruitment", "open fte"), "portfolio.hiring_requests", ("hiring_office",), {
+        }, "portfolio_projects.due_date"),
+    "hiring": Dashboard("portfolio.hiring_requests", ("hiring_office",), {
             "open_fte": Measure("Open hiring capacity", "FTE", "Sum open FTE across open requisitions.", "SUM(hiring_requests.open_fte)"),
-        }, "hiring_requests.expected_start_date", "hiring_requests.status = 'Open'",
-        views=("hiring office", "project", "role")),
-    "occupancy": Dashboard("Office occupancy", "Daily attendance and peak utilisation relative to seats.",
-        ("occupancy", "utilisation", "utilization", "onsite headcount", "attendance"), "facilities.office_daily_metrics", ("metrics_office",), {
+        }, "hiring_requests.expected_start_date", "hiring_requests.status = 'Open'"),
+    "occupancy": Dashboard("facilities.office_daily_metrics", ("metrics_office",), {
             "attendance": Measure("Recorded attendance", "person-days", "Sum daily distinct onsite counts. A person can attend on several days.", "SUM(office_daily_metrics.onsite_headcount)"),
             "utilisation": Measure("Peak seat utilisation", "%", "Capacity-weighted mean daily peak occupancy across recorded office-days.",
                                    "ROUND(100.0 * SUM(peak_occupancy) / NULLIF(SUM(seat_capacity), 0), 2)"),
-        }, "office_daily_metrics.metric_date", views=("office", "recorded day")),
-    "cost": Dashboard("Workplace costs", "Metered energy and operating costs per recorded office-day.",
-        ("energy", "electricity", "cost", "costs", "kwh"), "facilities.office_daily_metrics", ("metrics_office",), {
+        }, "office_daily_metrics.metric_date"),
+    "cost": Dashboard("facilities.office_daily_metrics", ("metrics_office",), {
             "energy": Measure("Energy use", "kWh", "Sum metered energy per office-day.", "ROUND(SUM(energy_kwh), 2)",
                               ("power consumption", "meter readings")),
             "energy_cost": Measure("Energy cost", "GBP", "Sum electricity charges per office-day.", "ROUND(SUM(energy_cost_gbp), 2)"),
             "operating_cost": Measure("Operating cost", "GBP", "Sum energy and other daily costs, excluding rent.", "ROUND(SUM(energy_cost_gbp + other_cost_gbp), 2)"),
-        }, "office_daily_metrics.metric_date", views=("office", "recorded day")),
-    "weather": Dashboard("Rain and attendance", "Attendance on days with recorded rain in the office city.",
-        ("rain", "rainy", "weather", "rainfall"), "facilities.office_daily_metrics", ("metrics_office", "office_weather"), {
+        }, "office_daily_metrics.metric_date"),
+    "weather": Dashboard("facilities.office_daily_metrics", ("metrics_office", "office_weather"), {
             "rain_attendance": Measure("Rainy-day attendance", "person-days", "Sum attendance only where the same city and date recorded precipitation.", "SUM(onsite_headcount)"),
-        }, "office_daily_metrics.metric_date", "weather_daily.rain_mm > 0", views=("office", "rainy day")),
-    "closures": Dashboard("Office closures", "Closure days in the local holiday calendar.",
-        ("closures", "closed", "holidays", "holiday"), "external.holiday_calendar", ("holiday_office",), {
+        }, "office_daily_metrics.metric_date", "weather_daily.rain_mm > 0"),
+    "closures": Dashboard("external.holiday_calendar", ("holiday_office",), {
             "closures": Measure("Office closures", "office-days", "Count office-local holiday dates marked closed.", "COUNT(holiday_calendar.holiday_date)"),
-        }, "holiday_calendar.holiday_date", "holiday_calendar.office_closed = 1", views=("office", "holiday date")),
+        }, "holiday_calendar.holiday_date", "holiday_calendar.office_closed = 1"),
 }
 
 def source_tables(report: Dashboard, joins=None) -> list[str]:
@@ -135,11 +123,38 @@ def database_uri(directory: Path, name: str) -> str:
     return path.resolve().as_uri() + "?mode=ro"
 
 
-def dashboard_metadata(key: str) -> dict:
-    report = DASHBOARDS[key]
-    return dict(dashboard_id=key, title=report.title, description=report.description,
-                keywords=list(report.keywords), kpi_tags=[measure.label for measure in report.measures.values()],
-                views=list(report.views))
+class PublishedDashboard(BaseModel):
+    dashboard_id: str = Field(pattern=r"^[a-z][a-z0-9_-]*$")
+    title: str = Field(min_length=1)
+    description: str = Field(min_length=1)
+    keywords: list[str]
+    kpi_tags: list[str] = Field(min_length=1)
+    dimensions: list[str] = Field(min_length=1)
+    business_purpose: str = Field(min_length=1)
+    supported_questions: list[str] = Field(min_length=1)
+    source_tables: list[str] = Field(min_length=1)
+    dashboard_url: str | None
+
+
+CATALOGUE_PATH = Path(__file__).with_name("dashboards.yml")
+
+
+def published_dashboards() -> dict[str, dict]:
+    try:
+        entries = yaml.safe_load(CATALOGUE_PATH.read_text(encoding="utf-8"))
+        if not isinstance(entries, list):
+            raise ValueError("Expected a list of dashboard descriptions.")
+        catalogue = {}
+        for entry in entries:
+            card = PublishedDashboard.model_validate(entry)
+            if card.dashboard_id in catalogue:
+                raise ValueError("Duplicate dashboard ID.")
+            if any(table not in DEMO_COLUMNS for table in card.source_tables):
+                raise ValueError("Unknown source in the dashboard catalogue.")
+            catalogue[card.dashboard_id] = card.model_dump()
+        return catalogue
+    except (yaml.YAMLError, ValidationError) as error:
+        raise ValueError("Invalid dashboard catalogue.") from error
 
 
 def configured_url(value) -> bool:
@@ -147,6 +162,10 @@ def configured_url(value) -> bool:
         return False
     try:
         parts = urlsplit(value)
+        hostname = (parts.hostname or "").lower().rstrip(".")
+        reserved = ("example.com", "example.net", "example.org", "example", "invalid", "test")
+        if any(hostname == domain or hostname.endswith("." + domain) for domain in reserved):
+            return False
         return bool(parts.scheme == "https" and parts.hostname and parts.username is None
                     and parts.password is None and parts.port != 0)
     except ValueError:
@@ -163,15 +182,16 @@ def read_dashboards() -> list[dict]:
             urls = json.loads(Path(config_path).read_text(encoding="utf-8"))
         except (OSError, ValueError):
             urls = None
-    for key in sorted(DASHBOARDS):
-        item = dashboard_metadata(key)
+    for key, item in published_dashboards().items():
+        destination = item["dashboard_url"]
         item.update(dashboard_url=None, url_status="placeholder")
         if not isinstance(urls, dict):
             item["url_status"] = "unavailable"
-        elif key in urls and urls[key] not in (None, ""):
-            if configured_url(urls[key]):
-                item.update(dashboard_url=urls[key], url_status="configured")
-            else:
+        else:
+            destination = urls.get(key, destination)
+            if configured_url(destination):
+                item.update(dashboard_url=destination, url_status="configured")
+            elif destination:
                 item["url_status"] = "unavailable"
         dashboards.append(item)
     return dashboards

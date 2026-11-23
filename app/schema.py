@@ -131,12 +131,12 @@ DEMO_EXAMPLES = (
 COLUMN_GUIDE = {
     "EMPLOYEE_ID": {
         "description": "Unique numeric identifier for one employee.",
-        "possible_values": "Integer IDs from 1001 to 1100 in the demo data.",
+        "possible_values": "Integer IDs from 1001 to 1100.",
     },
     "EMPLOYEE_NAME": {
         "description": "Synthetic full name of the employee.",
         "possible_values": (
-            "100 fictional demo names, such as AVA CARTER and LEO KOWALSKI."
+            "Synthetic employee names."
         ),
     },
     "DEPARTMENT": {

@@ -8,12 +8,11 @@ from ag_ui.core import CustomEvent, EventType, RunAgentInput, RunErrorEvent
 from ag_ui.encoder import EventEncoder
 from ag_ui_langgraph import LangGraphAgent
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import RedirectResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict
 
 from . import conversation
 from .catalogue import read_dashboards
-from .config import STATIC_DIR
 from .schema import DEMO_EXAMPLES
 
 router = APIRouter()
@@ -117,9 +116,9 @@ async def stream_turn(thread_id, run_id, intent, question, dashboard, dashboards
             conversation.turn_lock.release()
 
 
-@router.get("/conversation", response_class=FileResponse)
+@router.get("/conversation", include_in_schema=False)
 def conversation_page():
-    return STATIC_DIR / "conversation.html"
+    return RedirectResponse("/employees")
 
 
 @router.get("/conversation/examples")

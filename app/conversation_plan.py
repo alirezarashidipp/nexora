@@ -15,6 +15,8 @@ class DashboardMatch(Record):
     dashboard_id: str
     coverage: Literal["exact", "related"]
     kpi: str
+    dimensions: list[str]
+    requested_offices: list[str]
     gap: Literal["none", "measure", "breakdown", "period", "scope", "calculation", "cause", "forecast"]
     reason: str
 
@@ -72,11 +74,12 @@ def ask_model(prompt, payload, result_type):
     return parse_output(response, result_type)
 
 
-def discover(question: str, dashboards: list[dict]) -> tuple[list[dict], str, str]:
-    keys = ("dashboard_id", "title", "description", "keywords", "kpi_tags", "views")
+def discover(question: str, dashboards: list[dict], context: dict) -> tuple[list[dict], str, str]:
+    keys = ("dashboard_id", "title", "description", "keywords", "kpi_tags", "dimensions",
+            "business_purpose", "supported_questions", "source_tables")
     compact = [{key: item[key] for key in keys} for item in dashboards]
     catalogue = {item["dashboard_id"]: item for item in compact}
-    request = {"question": question, "catalogue": compact, "office_locations": list(CITIES)}
+    request = {"question": question, "catalogue": compact, "conversation_context": context, "office_locations": list(CITIES)}
     try:
         ranking = ask_model("dashboard_discovery", request, Matches)
     except (ValueError, LLMRequestRejectedError):
@@ -102,11 +105,15 @@ def discover(question: str, dashboards: list[dict]) -> tuple[list[dict], str, st
             continue
         if (match.coverage == "exact") != (match.gap == "none"):
             continue
+        if not set(match.dimensions) <= set(card["dimensions"]):
+            continue
+        if match.coverage == "exact" and not set(match.requested_offices) <= set(CITIES):
+            continue
         reason = " ".join(match.reason.split())
         if not 1 <= len(reason) <= 240:
             continue
         seen.add(key)
-        basis = f"Shows {match.kpi.lower()} by {', '.join(card['views'])}."
+        basis = f"Shows {match.kpi.lower()} by {', '.join(card['dimensions'])}."
         matches.append(dict(dashboard_id=key, coverage=match.coverage, reason=reason,
                             basis=basis, limitation=GAPS.get(match.gap, "")))
         if len(matches) == 3:
@@ -128,7 +135,7 @@ def context_for_question(question, selected, memory):
 def choose_sources(context):
     paths = {name: {"requires": sorted({left.split(".")[0] for left, _ in join.keys}),
                     "adds": join.target, "cardinality": join.cardinality} for name, join in JOINS.items()}
-    return ask_model("conversation_scope", {**context, "table_topics": TOPICS, "approved_paths": paths}, Scope)
+    return ask_model("conversation_scope", {**context, "office_locations": list(CITIES), "table_topics": TOPICS, "approved_paths": paths}, Scope)
 
 
 def plan_analysis(context, base, joins):
